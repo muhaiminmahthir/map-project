@@ -6,4 +6,4 @@ use Illuminate\Support\Facades\Route;
 //    return view('welcome');
 //});
 
-Route::view('/', 'map'); //map route
+Route::get('/', 'map'); //map route
