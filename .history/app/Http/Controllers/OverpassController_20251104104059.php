@@ -18,24 +18,24 @@ class OverpassController extends Controller
                 'geometry.coordinates' => 'required|array|min:1',
             ]);
 
-            // GeoJSON Polygon -> Overpass poly: "lat lon lat lon ..."
+            // GeoJSON Polygon -> Overpass poly: \"lat lon lat lon ...\"
             $ring = $data['geometry']['coordinates'][0] ?? [];
             if (count($ring) < 4) {
                 return response()->json(['error' => 'Polygon ring must have at least 4 positions (closed)'], 422);
             }
 
-            // Convert [lng,lat] -> "lat lon" and validate ranges
+            // Convert [lng,lat] -> \"lat lon\" and validate ranges
             $parts = [];
             foreach ($ring as $c) {
                 if (!is_array($c) || count($c) < 2) {
-                    throw new \RuntimeException('Invalid coordinate format.');
+                    throw new \\RuntimeException('Invalid coordinate pair.');
                 }
                 $lng = $c[0];
                 $lat = $c[1];
                 if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                    throw new \RuntimeException('Invalid coordinate range.');
+                    throw new \\RuntimeException('Invalid coordinate range.');
                 }
-                $parts[] =($lat.' '.$lng);
+                $parts[] = $lat.' '.$lng;
             }
             $polyStr = implode(' ', $parts);
 
@@ -44,7 +44,7 @@ class OverpassController extends Controller
             $json = Cache::remember($cacheKey, now()->addMinutes(15), function () use ($polyStr) {
                 $ql = <<<QL
 [out:json][timeout:40];
-way["highway"]["name"](poly:"$polyStr");
+way[\"highway\"][\"name\"](poly:\"$polyStr\");
 (._;>;);
 out body;
 QL;
@@ -93,7 +93,7 @@ QL;
                 }
 
                 $name = $el['tags']['name'] ?? '(unnamed)';
-                if ($name) $namesSet[$name] = true;
+                if (!isset($namesSet[$name]) && $name) $namesSet[$name] = true;
 
                 $features[] = [
                     'type' => 'Feature',
@@ -120,9 +120,9 @@ QL;
                 ],
             ]);
 
-        } catch (\Illuminate\Validation\ValidationException $ve) {
+        } catch (\\Illuminate\\Validation\\ValidationException $ve) {
             return response()->json(['error' => 'Invalid geometry', 'details' => $ve->errors()], 422);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             Log::error('roads() failed', ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json([
                 'error' => 'Server error in roads endpoint',

@@ -25,93 +25,34 @@
     <div id="list"></div>
   </aside>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+function selectFeature(featureId, fit = true) {
+  const layer = layerIndex.get(featureId);
+  if (!layer) return;
+
+  if (selectedLayer && selectedLayer !== layer) {
+    selectedLayer.setStyle(defaultRoadStyle);
+  }
+
+  layer.setStyle(highlightStyle);
+  layer.bringToFront();
+  selectedLayer = layer;
+
+  if (fit) map.fitBounds(layer.getBounds(), { padding:[50,50] });
+  layer.openPopup();
+}
+
+</script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script>
     const map = L.map('map').setView([4.2105, 101.9758], 6); // Malaysia
 
-// --- Road drawing & highlight support ---
-const defaultRoadStyle = { color:'#60a5fa', weight:3, opacity:1 };
+const defaultRoadStyle = { color:'#60a5fa', weight:3 };
 const highlightStyle   = { color:'#f59e0b', weight:7, opacity:1 };
 
-// Indexes
-const layerIndexById = new Map();     // id -> Leaflet layer
-const idsByName = new Map();          // name -> Set(ids)
-let selectedIds = new Set();
+let selectedLayer = null;
+const layerIndex = new Map();
 
-// Layer for road features
-const roadsLayer = L.geoJSON(null, {
-  style: defaultRoadStyle,
-  onEachFeature: (f, layer) => {
-    const id = f?.properties?.id ?? f?.id;
-    const name = f?.properties?.name ?? '(unnamed)';
-    if (id != null) layerIndexById.set(id, layer);
-    if (name) {
-      if (!idsByName.has(name)) idsByName.set(name, new Set());
-      if (id != null) idsByName.get(name).add(id);
-    }
-    layer.bindPopup(`<b>${name}</b>${f?.properties?.highway ? '<br>'+f.properties.highway : ''}`);
-    layer.on('mouseover', () => layer.setStyle({ weight:5 }));
-    layer.on('mouseout', () => {
-      const fid = id;
-      if (!fid || !selectedIds.has(fid)) layer.setStyle(defaultRoadStyle);
-    });
-  }
-}).addTo(map);
-
-function clearSelection() {
-  for (const id of selectedIds) {
-    const lyr = layerIndexById.get(id);
-    if (lyr) lyr.setStyle(defaultRoadStyle);
-  }
-  selectedIds.clear();
-}
-
-function selectByIds(ids, fit=true) {
-  clearSelection();
-  const bounds = L.latLngBounds();
-  for (const id of ids) {
-    const lyr = layerIndexById.get(id);
-    if (lyr) {
-      lyr.setStyle(highlightStyle);
-      lyr.bringToFront();
-      selectedIds.add(id);
-      try { bounds.extend(lyr.getBounds()); } catch {}
-      lyr.openPopup();
-    }
-  }
-  if (fit && bounds.isValid()) map.fitBounds(bounds, { padding:[40,40] });
-}
-
-function renderFeatureSidebar(features, ms) {
-  // Build a unique list by road name -> ids
-  idsByName.clear();
-  for (const f of features) {
-    const name = f?.properties?.name ?? '(unnamed)';
-    const id = f?.properties?.id ?? f?.id;
-    if (!idsByName.has(name)) idsByName.set(name, new Set());
-    if (id != null) idsByName.get(name).add(id);
-  }
-
-  const stats = document.getElementById('stats');
-  stats.innerHTML = `<small>${features.length} road segments${ms ? ' ('+ms+' ms)' : ''}</small>`;
-
-  const list = document.getElementById('list');
-  list.innerHTML = '';
-
-  // Sort names alphabetically
-  const entries = Array.from(idsByName.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
-
-  for (const [name, idset] of entries) {
-    const btn = document.createElement('button');
-    btn.className = 'pill';
-    btn.title = 'Click to highlight on map';
-    const count = idset.size;
-    btn.innerHTML = `${name}${count>1 ? ' <small>(' + count + ')</small>' : ''}`;
-    btn.onclick = () => selectByIds(Array.from(idset), true);
-    list.appendChild(btn);
-  }
-}
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
@@ -196,18 +137,7 @@ function renderFeatureSidebar(features, ms) {
         if (!res.ok) throw new Error('API error '+res.status);
         const data = await res.json();
         const ms = Math.round(performance.now()-t0);
-        // Draw features if present; otherwise fallback to names-only mode
-        roadsLayer.clearLayers();
-        layerIndexById.clear();
-        clearSelection();
-
-        const fc = data.geojson || data.features || (data.type==='FeatureCollection' ? data : null);
-        if (fc && Array.isArray(fc.features)) {
-          roadsLayer.addData(fc);
-          renderFeatureSidebar(fc.features, ms);
-        } else {
-          renderNames(data.names || [], data.count ?? 0, ms);
-        }
+        renderNames(data.names || [], data.count ?? 0, ms);
       } catch (err) {
         document.getElementById('stats').innerHTML = `<small style="color:#b00">${err.message}</small>`;
         document.getElementById('list').innerHTML = '';
