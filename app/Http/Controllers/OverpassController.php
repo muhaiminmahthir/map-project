@@ -154,7 +154,7 @@ QL;
         return <<<QL
 [out:json][timeout:40];
 (
-  $filter(poly:"$polyStr");   -- make sure it's exactly poly:"$polyStr"
+  $filter(poly:"$polyStr");   
 );
 out tags;
 QL;
