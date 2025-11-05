@@ -12,121 +12,121 @@ class OverpassController extends Controller
     public function roads(Request $request)
     {
         try {
+            // 1) Validate geometry (Polygon with at least 4 points)
             $data = $request->validate([
                 'geometry' => 'required|array',
                 'geometry.type' => 'required|string|in:Polygon',
                 'geometry.coordinates' => 'required|array|min:1',
+                'geometry.coordinates.0' => 'required|array|min:4',
             ]);
 
-            // GeoJSON Polygon -> Overpass poly: "lat lon lat lon ..."
-            $ring = $data['geometry']['coordinates'][0] ?? [];
-            if (count($ring) < 4) {
-                return response()->json(['error' => 'Polygon ring must have at least 4 positions (closed)'], 422);
+            $ring = $data['geometry']['coordinates'][0];
+
+            // Optional safety: limit overly-detailed polygons
+            if (count($ring) > 1000) {
+                return response()->json([
+                    'error' => 'Polygon too detailed; please draw a smaller area.',
+                ], 422);
             }
 
-            // Convert [lng,lat] -> "lat lon" and validate ranges
-            $parts = [];
-            foreach ($ring as $c) {
+            // Overpass wants: "lat lon lat lon ..."
+            $polyStr = collect($ring)->map(function ($c) {
                 if (!is_array($c) || count($c) < 2) {
-                    throw new \RuntimeException('Invalid coordinate format.');
+                    throw new \RuntimeException('Invalid coordinate pair.');
                 }
-                $lng = $c[0];
-                $lat = $c[1];
-                if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                    throw new \RuntimeException('Invalid coordinate range.');
-                }
-                $parts[] =($lat.' '.$lng);
-            }
-            $polyStr = implode(' ', $parts);
+                return $c[1] . ' ' . $c[0]; // lat lon
+            })->implode(' ');
 
-            $cacheKey = 'overpass:full:' . md5($polyStr);
+            // 2) Cache per polygon (independent of mirror used)
+            $cacheKey = 'overpass:names:' . md5($polyStr);
 
             $json = Cache::remember($cacheKey, now()->addMinutes(15), function () use ($polyStr) {
+
+                // Lean query: we only need tags.name for roads
                 $ql = <<<QL
 [out:json][timeout:40];
-way["highway"]["name"](poly:"$polyStr");
-(._;>;);
-out body;
+(
+  way["highway"]["name"](poly:"$polyStr");
+);
+out tags;
 QL;
-                $resp = Http::timeout(45)
-                    ->withHeaders([
-                        'User-Agent' => 'Muhaimin-MapProject/1.0 (contact: example@example.com)',
-                    ])
-                    ->asForm()
-                    ->post('https://overpass-api.de/api/interpreter', ['data' => $ql]);
 
-                if (!$resp->ok()) {
-                    Log::warning('Overpass non-200', ['code' => $resp->status(), 'body' => $resp->body()]);
-                    return response()->json([
-                        'error' => 'Overpass error',
-                        'status' => $resp->status()
-                    ], 502)->throwResponse();
-                }
+                $endpoints = [
+                    'https://overpass-api.de/api/interpreter',
+                    'https://overpass.kumi.systems/api/interpreter',
+                    'https://overpass.openstreetmap.fr/api/interpreter',
+                ];
 
-                return $resp->json();
-            });
+                $lastError = null;
 
-            if (!is_array($json)) {
-                return $json; // a Response from throwResponse()
-            }
+                foreach ($endpoints as $url) {
+                    try {
+                        $resp = Http::timeout(40)
+                            ->retry(2, 500) // 2 quick retries, 500ms backoff
+                            ->withOptions([
+                                'verify' => true,
+                                'force_ip_resolve' => 'v4', // <-- key for GCP/IPv6 quirks
+                                'connect_timeout' => 10,
+                            ])
+                            ->withHeaders([
+                                'User-Agent' => 'Muhaimin-MapDashboard/1.0 (contact: you@example.com)',
+                            ])
+                            ->asForm()
+                            ->post($url, ['data' => $ql]);
 
-            // Build node map
-            $nodes = [];
-            foreach ($json['elements'] ?? [] as $el) {
-                if (($el['type'] ?? '') === 'node') {
-                    $nodes[$el['id']] = [$el['lat'], $el['lon']];
-                }
-            }
+                        if ($resp->ok()) {
+                            return $resp->json();
+                        }
 
-            $features = [];
-            $namesSet = [];
-
-            foreach ($json['elements'] ?? [] as $el) {
-                if (($el['type'] ?? '') !== 'way') continue;
-
-                $coords = [];
-                foreach ($el['nodes'] as $nid) {
-                    if (isset($nodes[$nid])) {
-                        [$lat, $lon] = $nodes[$nid];
-                        $coords[] = [$lon, $lat]; // GeoJSON is [lng,lat]
+                        Log::warning('Overpass non-200', [
+                            'url' => $url,
+                            'status' => $resp->status(),
+                            'body' => mb_substr($resp->body(), 0, 300),
+                        ]);
+                        $lastError = "HTTP {$resp->status()} from $url";
+                    } catch (\Throwable $e) {
+                        Log::warning('Overpass connect failed', [
+                            'url' => $url,
+                            'err' => $e->getMessage(),
+                        ]);
+                        $lastError = $e->getMessage();
+                        continue; // try next mirror
                     }
                 }
 
-                $name = $el['tags']['name'] ?? '(unnamed)';
-                if ($name) $namesSet[$name] = true;
+                // If all mirrors failed, propagate a recognizable failure
+                throw new \RuntimeException('All Overpass endpoints failed: ' . ($lastError ?? 'unknown'));
+            });
 
-                $features[] = [
-                    'type' => 'Feature',
-                    'properties' => [
-                        'id' => $el['id'],
-                        'name' => $name,
-                        'highway' => $el['tags']['highway'] ?? null,
-                    ],
-                    'geometry' => [
-                        'type' => 'LineString',
-                        'coordinates' => $coords,
-                    ],
-                ];
+            if (!is_array($json)) {
+                // In case something odd got cached
+                Log::warning('Unexpected cache payload type', ['type' => gettype($json)]);
+                return response()->json(['error' => 'Cache payload invalid'], 500);
             }
 
-            $names = array_keys($namesSet);
+            // 3) Collect unique names
+            $names = collect($json['elements'] ?? [])
+                ->map(fn ($e) => $e['tags']['name'] ?? null)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
 
             return response()->json([
                 'count' => count($names),
                 'names' => $names,
-                'geojson' => [
-                    'type' => 'FeatureCollection',
-                    'features' => $features,
-                ],
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $ve) {
             return response()->json(['error' => 'Invalid geometry', 'details' => $ve->errors()], 422);
+        } catch (\RuntimeException $re) {
+            // All mirrors failed etc. -> return 502 (bad upstream) instead of 500
+            return response()->json(['error' => $re->getMessage()], 502);
         } catch (\Throwable $e) {
-            Log::error('roads() failed', ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            Log::error('roads() failed', ['msg' => $e->getMessage()]);
             return response()->json([
                 'error' => 'Server error in roads endpoint',
-                'hint'  => 'Check PHP cURL/SSL config or laravel.log',
+                'hint'  => 'Check laravel.log for details',
             ], 500);
         }
     }
