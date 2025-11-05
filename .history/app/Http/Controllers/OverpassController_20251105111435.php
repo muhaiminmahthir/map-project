@@ -12,6 +12,7 @@ class OverpassController extends Controller
     public function roads(Request $request)
     {
         try {
+            // ---- 1) Validate input ----
             $data = $request->validate([
                 'geometry' => 'required|array',
                 'geometry.type' => 'required|string|in:Polygon',
@@ -26,7 +27,7 @@ class OverpassController extends Controller
                 return response()->json(['error' => 'Polygon too detailed; draw a smaller area.'], 422);
             }
 
-            // Overpass needs "lat lon" pairs
+            // Overpass wants "lat lon lat lon ..."
             $polyStr = collect($ring)->map(function ($c) {
                 if (!is_array($c) || count($c) < 2) {
                     throw new \RuntimeException('Invalid coordinate pair.');
@@ -35,10 +36,12 @@ class OverpassController extends Controller
             })->implode(' ');
 
             $withGeom   = (bool)$request->boolean('with_geom');
-            $nameFilter = $request->input('name');
+            $nameFilter = $request->input('name'); // optional; if set, we fetch geometry for this exact name
 
+            // ---- 2) Build Overpass QL ----
             $ql = $this->buildQuery($polyStr, $withGeom, $nameFilter);
 
+            // ---- 3) Cache key (polygon + mode + name) ----
             $cacheKey = 'overpass:' . sha1(json_encode([
                 'poly' => $polyStr,
                 'geom' => $withGeom,
@@ -50,6 +53,7 @@ class OverpassController extends Controller
                     'https://overpass.kumi.systems/api/interpreter',
                     'https://z.overpass-api.de/api/interpreter',
                     'https://overpass-api.de/api/interpreter',
+                    // 'https://overpass.openstreetmap.fr/api/interpreter', // often flaky
                 ];
 
                 $lastError = null;
@@ -57,10 +61,10 @@ class OverpassController extends Controller
                 foreach ($endpoints as $url) {
                     try {
                         $resp = Http::timeout(40)
-                            ->retry(2, 500)
+                            ->retry(2, 500) // 2 retries, 500ms backoff
                             ->withOptions([
                                 'verify' => true,
-                                'force_ip_resolve' => 'v4',
+                                'force_ip_resolve' => 'v4', // avoid IPv6 route issues
                                 'connect_timeout' => 10,
                             ])
                             ->withHeaders([
@@ -74,14 +78,18 @@ class OverpassController extends Controller
                         }
 
                         Log::warning('Overpass non-200', [
-                            'url' => $url, 'status' => $resp->status(),
+                            'url' => $url,
+                            'status' => $resp->status(),
                             'body' => mb_substr($resp->body(), 0, 300),
                         ]);
                         $lastError = "HTTP {$resp->status()} from $url";
                     } catch (\Throwable $e) {
-                        Log::warning('Overpass connect failed', ['url' => $url, 'err' => $e->getMessage()]);
+                        Log::warning('Overpass connect failed', [
+                            'url' => $url,
+                            'err' => $e->getMessage(),
+                        ]);
                         $lastError = $e->getMessage();
-                        continue;
+                        continue; // try next mirror
                     }
                 }
 
@@ -93,7 +101,9 @@ class OverpassController extends Controller
                 return response()->json(['error' => 'Cache payload invalid'], 500);
             }
 
+            // ---- 4) Response shaping ----
             if (!$withGeom) {
+                // Names-only mode (fast)
                 $names = collect($json['elements'] ?? [])
                     ->map(fn($e) => $e['tags']['name'] ?? null)
                     ->filter()
@@ -101,14 +111,17 @@ class OverpassController extends Controller
                     ->values()
                     ->all();
 
-                return response()->json(['count' => count($names), 'names' => $names]);
+                return response()->json([
+                    'count' => count($names),
+                    'names' => $names,
+                ]);
             }
 
-            // with_geom = true → build GeoJSON for highlighting
+            // with_geom=true → build GeoJSON FeatureCollection
             $features = collect($json['elements'] ?? [])
                 ->filter(fn($e) => ($e['type'] ?? '') === 'way' && !empty($e['geometry']))
                 ->map(function ($e) {
-                    $coords = array_map(fn($p) => [$p['lon'], $p['lat']], $e['geometry']);
+                    $coords = array_map(fn($p) => [$p['lon'], $p['lat']], $e['geometry']); // LineString
                     return [
                         'type' => 'Feature',
                         'geometry' => ['type' => 'LineString', 'coordinates' => $coords],
@@ -121,7 +134,10 @@ class OverpassController extends Controller
                 ->values()
                 ->all();
 
-            return response()->json(['type' => 'FeatureCollection', 'features' => $features]);
+            return response()->json([
+                'type' => 'FeatureCollection',
+                'features' => $features,
+            ]);
 
         } catch (\Illuminate\Validation\ValidationException $ve) {
             return response()->json(['error' => 'Invalid geometry', 'details' => $ve->errors()], 422);
@@ -129,19 +145,25 @@ class OverpassController extends Controller
             return response()->json(['error' => $re->getMessage()], 502);
         } catch (\Throwable $e) {
             Log::error('roads() failed', ['msg' => $e->getMessage()]);
-            return response()->json(['error' => 'Server error in roads endpoint', 'hint' => 'Check laravel.log'], 500);
+            return response()->json([
+                'error' => 'Server error in roads endpoint',
+                'hint'  => 'Check laravel.log',
+            ], 500);
         }
     }
 
     private function buildQuery(string $polyStr, bool $withGeom, ?string $nameFilter): string
     {
-        // Base filter
+        // Base filter: highway ways with a name
         $filter = 'way["highway"]["name"]';
+
         if ($nameFilter !== null && $nameFilter !== '') {
+            // Exact match for clean UX; to support partials use ~"pattern"
             $safe = addcslashes($nameFilter, "\"\\");
             $filter = 'way["highway"]["name"="'.$safe.'"]';
         }
 
+        // Output — tags-only for speed, or geom+tags for highlighting
         if ($withGeom) {
             return <<<QL
 [out:json][timeout:40];
@@ -154,7 +176,7 @@ QL;
             return <<<QL
 [out:json][timeout:40];
 (
-  $filter(poly:"$polyStr");
+  $filter(poly:""$polyStr"");
 );
 out tags;
 QL;
