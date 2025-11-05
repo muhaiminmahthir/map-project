@@ -53,8 +53,9 @@ QL;
 
                 $endpoints = [
                     'https://overpass-api.de/api/interpreter',
+                    'https://z.overpass-api.de/api/interpreter',
                     'https://overpass.kumi.systems/api/interpreter',
-                    'https://overpass.openstreetmap.fr/api/interpreter',
+                    //'https://overpass.openstreetmap.fr/api/interpreter',
                 ];
 
                 $lastError = null;
@@ -68,6 +69,7 @@ QL;
                                 'force_ip_resolve' => 'v4', // <-- key for GCP/IPv6 quirks
                                 'connect_timeout' => 10,
                             ])
+                            ->retry(2, 500)
                             ->withHeaders([
                                 'User-Agent' => 'Muhaimin-MapDashboard/1.0 (contact: you@example.com)',
                             ])
