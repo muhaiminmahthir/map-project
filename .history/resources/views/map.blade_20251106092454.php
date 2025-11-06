@@ -28,14 +28,13 @@
 </style>
 </head>
 <body>
-  <div class="map-page">
-    <div id="map"></div>
-    <div id="sidebar">
-      <h3 style="margin-top:0;">Road Names</h3>
-      <div id="stats"><small>Draw an area on the map</small></div>
-      <div id="list"></div>
-    </div>
+  <div id="map"></div>
+  <div id="sidebar">
+    <h3 style="margin-top:0;">Road Names</h3>
+    <div id="stats"><small>Draw an area on the map</small></div>
+    <div id="list"></div>
   </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
