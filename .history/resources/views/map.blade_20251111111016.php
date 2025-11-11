@@ -24,11 +24,6 @@
   @media (max-width: 900px) {
     .map-page { grid-template-columns: 1fr; }
     #sidebar { height: 40vh; border-top: 1px solid #ddd; }
-  .area-header {
-  font-weight: 600;
-  margin-top: 0.75rem;
-  margin-bottom: 0.25rem;
-  }
   }
 </style>
 </head>
@@ -141,78 +136,61 @@
     }
   });
 
-  // ---------- list rendering (all areas) ----------
-  function renderAllAreas(ms) {
-    const stats = document.getElementById('stats');
-    const list  = document.getElementById('list');
-    list.innerHTML = '';
+// ---------- list rendering (all areas) ----------
+function renderAllAreas(ms) {
+  const stats = document.getElementById('stats');
+  const list  = document.getElementById('list');
+  list.innerHTML = '';
 
-    let totalRoads = 0;
+  let totalRoads = 0;
 
-    areas.forEach((area, index) => {
-      totalRoads += area.roads.length;
+  areas.forEach((area, index) => {
+    totalRoads += area.roads.length;
 
-      // Area header
-      const header = document.createElement('div');
-      header.className = 'area-header';
-      header.textContent = `Area ${index + 1} – ${area.roads.length} roads`;
-      list.appendChild(header);
+    // Area header
+    const header = document.createElement('div');
+    header.className = 'area-header';
+    header.textContent = `Area ${index + 1} – ${area.roads.length} roads`;
+    list.appendChild(header);
 
-      // Roads under this area
-      area.roads.forEach(road => {
-        const pill = document.createElement('button');
-        pill.className = 'pill';
-        pill.textContent = road.label;
+    // Roads under this area
+    area.roads.forEach(road => {
+      const pill = document.createElement('button');
+      pill.className = 'pill';
+      pill.textContent = road.label;
 
-        pill.dataset.areaId = area.id;
-        pill.dataset.key    = road.key;
-        pill.dataset.label  = road.label;
+      pill.dataset.areaId = area.id;
+      pill.dataset.key    = road.key;
+      pill.dataset.label  = road.label;
 
-        // Highlight this road inside THIS area
-        pill.onclick = () => highlightRoad(area.id, road.key);
+      // Highlight this road inside THIS area
+      pill.onclick = () => highlightRoad(area.id, road.key);
 
-        list.appendChild(pill);
-      });
+      list.appendChild(pill);
     });
+  });
 
-    stats.innerHTML =
-      `<small>${areas.length} areas, ${totalRoads} roads total` +
-      (ms != null ? ` (${ms} ms last area)` : '') +
-      `</small>`;
+  stats.innerHTML =
+    `<small>${areas.length} areas, ${totalRoads} roads total` +
+    (ms != null ? ` (${ms} ms last area)` : '') +
+    `</small>`;
 }
 
   // ---------- click highlight ----------
-  async function highlightRoad(areaId, name) {
-    const area = areas.find(a => a.id === areaId);
-    if (!area) {
-      alert('Area not found (maybe it was cleared?)');
-      return;
-    }
-
-    const geometry = area.geometry;
-
+  async function highlightRoad(name){
+    if(!currentGeometry) return alert('Draw an area first.');
     try {
       const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ geometry, with_geom: true, name })
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({ geometry: currentGeometry, with_geom:true, name })
       });
-      if (!res.ok) {
-        alert('API ' + res.status);
-        return;
-      }
-
+      if(!res.ok){ alert('API '+res.status); return; }
       const fc = await res.json();
-      if (highlightLayer) highlightLayer.remove();
-      highlightLayer = L.geoJSON(fc, { style: { weight: 4, color: 'orange' } }).addTo(map);
-
-      try {
-        map.fitBounds(highlightLayer.getBounds(), { padding: [20, 20] });
-      } catch (e) {}
-    } catch (err) {
+      if(highlightLayer) highlightLayer.remove();
+      highlightLayer = L.geoJSON(fc,{style:{weight:4,color:'orange'}}).addTo(map);
+      try{ map.fitBounds(highlightLayer.getBounds(),{padding:[20,20]}); }catch(e){}
+    } catch(err){
       console.error(err);
       alert('Failed to fetch geometry');
     }

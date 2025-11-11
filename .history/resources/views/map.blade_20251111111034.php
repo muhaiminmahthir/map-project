@@ -24,11 +24,6 @@
   @media (max-width: 900px) {
     .map-page { grid-template-columns: 1fr; }
     #sidebar { height: 40vh; border-top: 1px solid #ddd; }
-  .area-header {
-  font-weight: 600;
-  margin-top: 0.75rem;
-  margin-bottom: 0.25rem;
-  }
   }
 </style>
 </head>
@@ -182,37 +177,20 @@
 }
 
   // ---------- click highlight ----------
-  async function highlightRoad(areaId, name) {
-    const area = areas.find(a => a.id === areaId);
-    if (!area) {
-      alert('Area not found (maybe it was cleared?)');
-      return;
-    }
-
-    const geometry = area.geometry;
-
+  async function highlightRoad(name){
+    if(!currentGeometry) return alert('Draw an area first.');
     try {
       const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ geometry, with_geom: true, name })
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({ geometry: currentGeometry, with_geom:true, name })
       });
-      if (!res.ok) {
-        alert('API ' + res.status);
-        return;
-      }
-
+      if(!res.ok){ alert('API '+res.status); return; }
       const fc = await res.json();
-      if (highlightLayer) highlightLayer.remove();
-      highlightLayer = L.geoJSON(fc, { style: { weight: 4, color: 'orange' } }).addTo(map);
-
-      try {
-        map.fitBounds(highlightLayer.getBounds(), { padding: [20, 20] });
-      } catch (e) {}
-    } catch (err) {
+      if(highlightLayer) highlightLayer.remove();
+      highlightLayer = L.geoJSON(fc,{style:{weight:4,color:'orange'}}).addTo(map);
+      try{ map.fitBounds(highlightLayer.getBounds(),{padding:[20,20]}); }catch(e){}
+    } catch(err){
       console.error(err);
       alert('Failed to fetch geometry');
     }
