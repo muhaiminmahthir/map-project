@@ -106,30 +106,34 @@ class OverpassController extends Controller
                         $id      = $e['id'] ?? null;
 
                         if ($hasName) {
-                            // Named road → grouped by name
+                            // Named road → key = actual OSM name
                             return [
                                 'key'   => $osmName,        // used for highlight query
-                                'label' => $osmName,        // shown in sidebar (editable)
-                                'id'    => $id,
+                                'label' => $osmName,        // show in sidebar (editable)
+                                'id'    => $id,             // for debugging
                             ];
                         }
 
-                        // Unnamed road → one entry per way ID
+                        // Unnamed road → special key + default label
                         return [
-                            'key'   => '__unnamed__:' . $id, // special key: type + ID
-                            'label' => 'Unnamed road',       // initial text (you can rename in JS)
-                            'id'    => $id,
+                            'key'   => '__unnamed__' . $id,     // tell backend "roads with no name tag"
+                            'label' => 'Unnamed road',    // initial text shown in sidebar
+                            'id'    => $id,                 
                         ];
                     })
-                    ->unique('key')   // avoid duplicates if any
+                    // Keep one entry per key (one "Unnamed road" group)
+                    ->unique('key')
                     ->values()
                     ->all();
 
                 return response()->json([
                     'count' => count($roads),
                     'roads' => $roads,
+                    // backwards compatibility if you still ever use data.names
+                    'names' => array_column($roads, 'label'),
                 ]);
             }
+
 
             // with_geom = true → build GeoJSON for highlighting
             $features = collect($json['elements'] ?? [])
@@ -171,46 +175,54 @@ class OverpassController extends Controller
         }
     }
 
-    private function buildQuery(string $polyStr, bool $withGeom, ?string $nameFilter): string
-    {
-        // Default: all highways in polygon
-        $filter = 'way["highway"]';
+private function buildQuery(string $polyStr, bool $withGeom, ?string $nameFilter): string
+{
+    // Default: all highways within polygon
+    $filter = 'way["highway"]';
 
-        if ($nameFilter !== null && $nameFilter !== '') {
+    if ($nameFilter !== null && $nameFilter !== '') {
 
-            // Case 1: unnamed road segment, key = "__unnamed__:<id>"
-            if (strpos($nameFilter, '__unnamed__:') === 0) {
-                $id = substr($nameFilter, strlen('__unnamed__:'));
+        // Case 1: unnamed road segment, key = "__unnamed__:<id>"
+        if (strpos($nameFilter, '__unnamed__:') === 0) {
+            $id = substr($nameFilter, strlen('__unnamed__:'));
 
-                if ($withGeom) {
-                    // Highlight exactly this way by ID
-                    return "[out:json][timeout:40];\n"
-                        . "way(" . $id . ");\n"
-                        . "out geom tags;";
-                }
-
-                // Fallback for non-geom path (not really used, but safe)
-                $filter = 'way(' . $id . ')';
-
-            // Case 2: normal named road
+            if ($withGeom) {
+                // For highlighting: fetch this exact way by ID
+                return <<<QL
+[out:json][timeout:40];
+way($id);
+out geom tags;
+QL;
             } else {
-                $safe   = addcslashes($nameFilter, "\"\\");
-                $filter = 'way["highway"]["name"="' . $safe . '"]';
+                // not actually used for the "list only" path,
+                // but we keep a fallback to be safe
+                $filter = "way($id)";
             }
+
+        // Case 2: named road - filter by name inside polygon (previous behaviour)
+        } else {
+            $safe = addcslashes($nameFilter, "\"\\");
+            $filter = 'way["highway"]["name"="'.$safe.'"]';
         }
-
-        // Base query for polygon-based requests
-        $base = "[out:json][timeout:40];\n"
-            . "(\n"
-            . "  " . $filter . '(poly:"' . $polyStr . '");' . "\n"
-            . ");\n";
-
-        if ($withGeom) {
-            // With geometry (highlight)
-            return $base . "out geom tags;";
-        }
-
-        // Names-only listing
-        return $base . "out tags;";
     }
+
+    // Default + named-road highlighting still use polygon-based filter
+    if ($withGeom) {
+        return <<<QL
+[out:json][timeout:40];
+(
+  $filter(poly:"$polyStr");
+);
+out geom tags;
+QL;
+    } else {
+        return <<<QL
+[out:json][timeout:40];
+(
+  $filter(poly:"$polyStr");   
+);
+out tags;
+QL;
+    }
+}
 }

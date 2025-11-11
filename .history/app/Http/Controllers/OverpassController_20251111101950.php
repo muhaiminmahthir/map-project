@@ -173,7 +173,7 @@ class OverpassController extends Controller
 
     private function buildQuery(string $polyStr, bool $withGeom, ?string $nameFilter): string
     {
-        // Default: all highways in polygon
+        // Default: all highways within polygon
         $filter = 'way["highway"]';
 
         if ($nameFilter !== null && $nameFilter !== '') {
@@ -189,24 +189,24 @@ class OverpassController extends Controller
                         . "out geom tags;";
                 }
 
-                // Fallback for non-geom path (not really used, but safe)
+                // "list only" case
                 $filter = 'way(' . $id . ')';
 
-            // Case 2: normal named road
+            // Case 2: named road – filter by name inside polygon
             } else {
                 $safe   = addcslashes($nameFilter, "\"\\");
                 $filter = 'way["highway"]["name"="' . $safe . '"]';
             }
         }
 
-        // Base query for polygon-based requests
+        // Common prefix for polygon-based queries
         $base = "[out:json][timeout:40];\n"
             . "(\n"
             . "  " . $filter . '(poly:"' . $polyStr . '");' . "\n"
             . ");\n";
 
         if ($withGeom) {
-            // With geometry (highlight)
+            // Named/all roads with geometry
             return $base . "out geom tags;";
         }
 
