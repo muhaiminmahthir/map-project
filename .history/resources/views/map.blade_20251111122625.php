@@ -158,7 +158,7 @@
     }
   });
 
-  // ---------- list rendering (all areas, with rename) ----------
+  // ---------- list rendering (all areas) ----------
   function renderAllAreas(ms) {
     const stats = document.getElementById('stats');
     const list  = document.getElementById('list');
@@ -166,53 +166,42 @@
 
     let totalRoads = 0;
 
-    // loop over all areas
-    areas.forEach((area, index) => {
-      totalRoads += area.roads.length;
+    area.roads.forEach(road => {
+    const pill = document.createElement('button');
+    pill.className = 'pill';
+    pill.textContent = road.label;
 
-      // Area header
-      const header = document.createElement('div');
-      header.className = 'area-header';
-      header.textContent = `Area ${index + 1} – ${area.roads.length} roads`;
-      list.appendChild(header);
+    pill.dataset.areaId = area.id;
+    pill.dataset.key    = road.key;
+    pill.dataset.label  = road.label;
 
-      // Roads under this area
-      area.roads.forEach(road => {
-        const pill = document.createElement('button');
-        pill.className = 'pill';
-        pill.textContent = road.label;
+    // 👉 Click → highlight this road in this area
+    pill.onclick = () => highlightRoad(area.id, road.key);
 
-        pill.dataset.areaId = area.id;
-        pill.dataset.key    = road.key;
-        pill.dataset.label  = road.label;
+    // 👉 Double-click → local rename (only on your side)
+    pill.ondblclick = () => {
+      const current = pill.dataset.label || pill.textContent;
+      const renamed = prompt('Enter a local name for this road:', current);
+      if (renamed && renamed.trim()) {
+        const clean = renamed.trim();
+        pill.dataset.label = clean;
+        pill.textContent   = clean;
 
-        // Click → highlight this road within THIS area
-        pill.onclick = () => highlightRoad(area.id, road.key);
+        // Optional: persist rename inside areas[] for later re-renders
+        const r = area.roads.find(r => r.key === road.key);
+        if (r) r.label = clean;
+      }
+    };
 
-        // Double-click → local rename (works for unnamed roads too)
-        pill.ondblclick = () => {
-          const current = pill.dataset.label || pill.textContent;
-          const renamed = prompt('Enter a local name for this road:', current);
-          if (renamed && renamed.trim()) {
-            const clean = renamed.trim();
-            pill.dataset.label = clean;
-            pill.textContent   = clean;
-
-            // keep rename in our data structure
-            const r = area.roads.find(r => r.key === road.key);
-            if (r) r.label = clean;
-          }
-        };
-
-        list.appendChild(pill);
-      });
+    list.appendChild(pill);
     });
+
 
     stats.innerHTML =
       `<small>${areas.length} areas, ${totalRoads} roads total` +
       (ms != null ? ` (${ms} ms last area)` : '') +
       `</small>`;
-}
+  }
 
   // ---------- click highlight ----------
   async function highlightRoad(areaId, name) {
