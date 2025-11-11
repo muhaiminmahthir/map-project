@@ -94,71 +94,32 @@ class OverpassController extends Controller
             }
 
             if (!$withGeom) {
-                $roads = collect($json['elements'] ?? [])
-                    ->filter(fn($e) =>
-                        ($e['type'] ?? '') === 'way'
-                        && isset($e['tags']['highway'])
-                    )
-                    ->map(function ($e) {
-                        $tags    = $e['tags'] ?? [];
-                        $osmName = $tags['name'] ?? null;
-                        $hasName = $osmName !== null && trim($osmName) !== '';
-
-                        if ($hasName) {
-                            // Named road → key = actual OSM name
-                            return [
-                                'key'   => $osmName,        // used for highlight query
-                                'label' => $osmName,        // shown in sidebar (can be edited)
-                            ];
-                        }
-
-                        // Unnamed road → special key + default label
-                        return [
-                            'key'   => '__unnamed__',     // tell backend "roads with no name tag"
-                            'label' => 'Unnamed road',    // initial text shown in sidebar
-                        ];
-                    })
-                    // Keep one entry per key (one "Unnamed road" group)
-                    ->unique('key')
+                $names = collect($json['elements'] ?? [])
+                    ->map(fn($e) => $e['tags']['name'] ?? null)
+                    ->filter()
+                    ->unique()
                     ->values()
                     ->all();
 
-                return response()->json([
-                    'count' => count($roads),
-                    'roads' => $roads,
-                    // backwards compatibility if you still ever use data.names
-                    'names' => array_column($roads, 'label'),
-                ]);
+                return response()->json(['count' => count($names), 'names' => $names]);
             }
-
 
             // with_geom = true → build GeoJSON for highlighting
             $features = collect($json['elements'] ?? [])
                 ->filter(fn($e) => ($e['type'] ?? '') === 'way' && !empty($e['geometry']))
                 ->map(function ($e) {
-                    $coords  = array_map(fn($p) => [$p['lon'], $p['lat']], $e['geometry']);
-                    $tags    = $e['tags'] ?? [];
-                    $osmName = $tags['name'] ?? null;
-                    $display = ($osmName !== null && trim($osmName) !== '')
-                        ? $osmName
-                        : 'Unnamed road';
-
+                    $coords = array_map(fn($p) => [$p['lon'], $p['lat']], $e['geometry']);
                     return [
                         'type' => 'Feature',
-                        'geometry' => [
-                            'type' => 'LineString',
-                            'coordinates' => $coords,
-                        ],
+                        'geometry' => ['type' => 'LineString', 'coordinates' => $coords],
                         'properties' => [
-                            'name'     => $display,                // always something
-                            'osm_name' => $osmName,                // raw OSM name (can be null)
-                            'highway'  => $tags['highway'] ?? null,
+                            'name' => $e['tags']['name'] ?? null,
+                            'highway' => $e['tags']['highway'] ?? null,
                         ],
                     ];
                 })
                 ->values()
                 ->all();
-
 
             return response()->json(['type' => 'FeatureCollection', 'features' => $features]);
 
