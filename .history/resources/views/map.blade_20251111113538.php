@@ -166,42 +166,37 @@
 
     let totalRoads = 0;
 
-    area.roads.forEach(road => {
-    const pill = document.createElement('button');
-    pill.className = 'pill';
-    pill.textContent = road.label;
+    areas.forEach((area, index) => {
+      totalRoads += area.roads.length;
 
-    pill.dataset.areaId = area.id;
-    pill.dataset.key    = road.key;
-    pill.dataset.label  = road.label;
+      // Area header
+      const header = document.createElement('div');
+      header.className = 'area-header';
+      header.textContent = `Area ${index + 1} – ${area.roads.length} roads`;
+      list.appendChild(header);
 
-    // 👉 Click → highlight this road in this area
-    pill.onclick = () => highlightRoad(area.id, road.key);
+      // Roads under this area
+      area.roads.forEach(road => {
+        const pill = document.createElement('button');
+        pill.className = 'pill';
+        pill.textContent = road.label;
 
-    // 👉 Double-click → local rename (only on your side)
-    pill.ondblclick = () => {
-      const current = pill.dataset.label || pill.textContent;
-      const renamed = prompt('Enter a local name for this road:', current);
-      if (renamed && renamed.trim()) {
-        const clean = renamed.trim();
-        pill.dataset.label = clean;
-        pill.textContent   = clean;
+        pill.dataset.areaId = area.id;
+        pill.dataset.key    = road.key;
+        pill.dataset.label  = road.label;
 
-        // Optional: persist rename inside areas[] for later re-renders
-        const r = area.roads.find(r => r.key === road.key);
-        if (r) r.label = clean;
-      }
-    };
+        // Highlight this road inside THIS area
+        pill.onclick = () => highlightRoad(area.id, road.key);
 
-    list.appendChild(pill);
+        list.appendChild(pill);
+      });
     });
-
 
     stats.innerHTML =
       `<small>${areas.length} areas, ${totalRoads} roads total` +
       (ms != null ? ` (${ms} ms last area)` : '') +
       `</small>`;
-  }
+}
 
   // ---------- click highlight ----------
   async function highlightRoad(areaId, name) {
@@ -335,7 +330,7 @@
     countrySearch.value = 'Malaysia';
     await searchCountries();
   })();
-
+  
   // ---------- clear all areas ----------
     document.getElementById('clearAllBtn').addEventListener('click', () => {
       if (areas.length === 0) {
