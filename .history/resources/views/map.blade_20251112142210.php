@@ -120,6 +120,11 @@
   const ADMIN_AREAS_URL = @json(route('api.admin-areas'));
   const ADMIN_GEOM_TMPL = @json(route('api.admin-geometry', ['relId' => 'REL_ID']));
   // ---------- setup map ----------
+  const map = L.map('map').setView([4.2105, 101.9758], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
 
     // --- Base maps ---
   const baseOSM = L.tileLayer(
