@@ -1,6 +1,6 @@
-# 🗺️ Route Finder Dashboard (Laravel + Leaflet + Overpass API)
+# Route Finder Dashboard (Laravel + Leaflet + Overpass API)
 
-A zero-cost Laravel web app that lets you draw an area (circle, rectangle, or polygon) on a map of Malaysia (or the world) and instantly list all road/route names found inside the highlighted area using OpenStreetMap and the Overpass API.
+A zero-cost Laravel web app that allow to draw an area (circle, rectangle, or polygon) on a map of Malaysia (or the world) and instantly list all road/route names found inside the highlighted area using OpenStreetMap and the Overpass API.
 
 ---
 
