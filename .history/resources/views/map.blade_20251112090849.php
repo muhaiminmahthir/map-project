@@ -141,7 +141,7 @@
 
     // Register a new area
     const areaId = nextAreaId++;
-    const area = { id: areaId, geometry, roads: [], buildings: [] };
+    const area = { id: areaId, geometry, roads: [] };
     areas.push(area);
 
     document.getElementById('stats').innerHTML = '<small>Fetching…</small>';
@@ -167,9 +167,6 @@
         return item;                           // { key, label, ... }
       });
 
-      // NEW: buildings / lots (may be empty)
-      area.buildings = Array.isArray(data.buildings) ? data.buildings : [];
-
       renderAllAreas(ms);
     } catch (err) {
       console.error(err);
@@ -191,6 +188,7 @@
     areas.forEach((area, index) => {
       totalRoads += area.roads.length;
 
+      // Area header
       const header = document.createElement('div');
       header.className = 'area-header';
       header.textContent = `Area ${index + 1} – ${area.roads.length} roads`;
@@ -206,9 +204,10 @@
         pill.dataset.key    = road.key;
         pill.dataset.label  = road.label;
 
-        // Multi-select highlight
+        // Click → toggle highlight for this road (multi-select)
         pill.onclick = () => toggleHighlightRoad(area.id, road.key, pill);
 
+        // Double-click → local rename (works for unnamed roads too)
         pill.ondblclick = () => {
           const current = pill.dataset.label || pill.textContent;
           const renamed = prompt('Enter a local name for this road:', current);
@@ -216,6 +215,8 @@
             const clean = renamed.trim();
             pill.dataset.label = clean;
             pill.textContent   = clean;
+
+            // keep rename in our data structure
             const r = area.roads.find(r => r.key === road.key);
             if (r) r.label = clean;
           }
@@ -223,28 +224,6 @@
 
         list.appendChild(pill);
       });
-
-      // Buildings / lots in this area
-      if (area.buildings && area.buildings.length) {
-        const bHeader = document.createElement('div');
-        bHeader.style.marginTop = '4px';
-        bHeader.style.fontSize  = '12px';
-        bHeader.style.fontWeight = '500';
-        bHeader.textContent = `Buildings / lots (${area.buildings.length})`;
-        list.appendChild(bHeader);
-
-        area.buildings.forEach(b => {
-          const row = document.createElement('div');
-          row.style.fontSize = '12px';
-
-          const parts = [];
-          if (b.lot_no) parts.push(b.lot_no);
-          if (b.name)   parts.push(b.name);
-          row.textContent = parts.join(' – ');
-
-          list.appendChild(row);
-        });
-      }
     });
 
     stats.innerHTML =
