@@ -330,7 +330,19 @@
   if (loadViewsBtn) {
     loadViewsBtn.addEventListener('click', loadViewsFromServer);
   }
-  // ---------- layer control ----------
+
+  L.control.layers(
+    {
+      'Standard': baseOSM,
+      'Satellite (Esri)': baseEsriSat
+    },
+    {
+      'Drawn areas': drawnItems,
+      'Highlighted roads': typeof highlightGroup !== 'undefined' ? highlightGroup : undefined
+    },
+    { collapsed: false }
+  ).addTo(map);
+
   L.control.layers(
   {
     'Standard': baseOSM,

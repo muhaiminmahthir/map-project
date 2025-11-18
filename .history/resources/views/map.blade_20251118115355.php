@@ -330,7 +330,19 @@
   if (loadViewsBtn) {
     loadViewsBtn.addEventListener('click', loadViewsFromServer);
   }
-  // ---------- layer control ----------
+
+  L.control.layers(
+    {
+      'Standard': baseOSM,
+      'Satellite (Esri)': baseEsriSat
+    },
+    {
+      'Drawn areas': drawnItems,
+      'Highlighted roads': typeof highlightGroup !== 'undefined' ? highlightGroup : undefined
+    },
+    { collapsed: false }
+  ).addTo(map);
+
   L.control.layers(
   {
     'Standard': baseOSM,
@@ -642,19 +654,24 @@
       alert('No areas to clear in this view.');
       return;
     }
+
     if (!confirm('Clear all drawn areas and highlights for ' + currentViewKey + '?')) {
       return;
     }
+
     // 1) Remove all drawn shapes from the map
     drawnItems.clearLayers();
+
     // 2) Reset the current view's data
     v.areas = [];
     v.nextAreaId = 1;
+
     // 3) Remove all highlighted roads (for this view)
     highlightGroup.clearLayers();
     for (const k in highlightLayers) {
       delete highlightLayers[k];
     }
+
     // 4) Re-render sidebar (stats + list) for the now-empty view
     renderAllAreas();
   });
