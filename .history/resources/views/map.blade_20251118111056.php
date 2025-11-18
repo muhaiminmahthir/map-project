@@ -80,7 +80,7 @@
   <div class="map-page">
     <div id="map"></div>
     <div id="sidebar">
-      <button id="clearAllBtn" class="btn-clear"> Clear All Areas</button>
+      <button id="clearAllBtn" class="btn-clear">🗑 Clear All Areas</button>
       <div style="margin:8px 0;">
         <label style="font-size:12px; font-weight:600;">
           View
@@ -91,8 +91,8 @@
         </label>
       </div>
       <div style="display:flex; gap:4px; margin-bottom:8px;">
-        <button id="saveViewsBtn" class="btn-clear" style="flex:1;"> Save views</button>
-        <button id="loadViewsBtn" class="btn-clear" style="flex:1;"> Load saved</button>
+        <button id="saveViewsBtn" class="btn-clear" style="flex:1;">💾 Save views</button>
+        <button id="loadViewsBtn" class="btn-clear" style="flex:1;">⟳ Load saved</button>
       </div>
       <div id="filters" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
         <label>
@@ -244,8 +244,6 @@
     });
   }
 
-  loadViewsFromServer(); // load saved state on initial load
-
   function switchView(newKey) {
     if (!views[newKey] || newKey === currentViewKey) return;
     currentViewKey = newKey;
@@ -253,82 +251,6 @@
       viewSelect.value = newKey;
     }
     rebuildCurrentView();
-  }
-  // --- SAVE CURRENT STATE OF ALL VIEWS TO SERVER ---
-  async function saveAllViewsToServer() {
-    try {
-      const res = await fetch(VIEWS_SAVE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          data: views   // <-- the full views object (view1, view2, etc.)
-        })
-      });
-
-      if (!res.ok) {
-        console.error('Save failed', res.status);
-        alert('Failed to save views (HTTP ' + res.status + ')');
-        return;
-      }
-
-      const json = await res.json();
-      console.log('Views saved at', json.updated_at);
-      // Optional toast: alert('Saved!');
-    } catch (err) {
-      console.error(err);
-      alert('Error while saving views');
-    }
-  }
-
-  // --- LOAD SAVED STATE FROM SERVER (ON DEMAND) ---
-  async function loadViewsFromServer() {
-    try {
-      const res = await fetch(VIEWS_LOAD_URL, {
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!res.ok) {
-        if (res.status === 404) {
-          console.log('No saved view state yet');
-          return;
-        }
-        console.error('Load failed', res.status);
-        alert('Failed to load saved views (HTTP ' + res.status + ')');
-        return;
-      }
-
-      const data = await res.json(); // should be the saved "views" object
-
-      // Overwrite our local views, but only for keys that exist
-      Object.keys(data).forEach(key => {
-        if (views[key]) {
-          views[key].areas = data[key].areas || [];
-          views[key].nextAreaId = data[key].nextAreaId || 1;
-        }
-      });
-
-      // After loading, rebuild the current view (view1 by default)
-      rebuildCurrentView();
-    } catch (err) {
-      console.error(err);
-      alert('Error while loading saved views');
-    }
-  }
-
-  // --- Attach to buttons ---
-  const saveViewsBtn = document.getElementById('saveViewsBtn');
-  if (saveViewsBtn) {
-    saveViewsBtn.addEventListener('click', saveAllViewsToServer);
-  }
-
-  const loadViewsBtn = document.getElementById('loadViewsBtn');
-  if (loadViewsBtn) {
-    loadViewsBtn.addEventListener('click', loadViewsFromServer);
   }
 
   L.control.layers(
