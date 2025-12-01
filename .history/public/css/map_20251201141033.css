@@ -138,67 +138,6 @@ html, body {
 }
 
 /* ========================================
-   View Management
-   ======================================== */
-.view-management {
-  margin: 8px 0;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
-}
-
-.view-buttons {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.btn-small {
-  padding: 4px 8px;
-  font-size: 11px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-add {
-  background: #d4edda;
-  border-color: #28a745;
-  color: #155724;
-}
-
-.btn-add:hover {
-  background: #c3e6cb;
-}
-
-.btn-rename {
-  background: #fff3cd;
-  border-color: #ffc107;
-  color: #856404;
-}
-
-.btn-rename:hover {
-  background: #ffeeba;
-}
-
-.btn-delete {
-  background: #f8d7da;
-  border-color: #dc3545;
-  color: #721c24;
-}
-
-.btn-delete:hover {
-  background: #f5c6cb;
-}
-
-.btn-small:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ========================================
    Responsive: Stack on small screens
    ======================================== */
 @media (max-width: 900px) {

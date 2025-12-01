@@ -81,104 +81,38 @@
   ).addTo(map);
 
   // ============================================================
-  // Multi-View State Management (DYNAMIC)
+  // Multi-View State Management
   // ============================================================
-  
-  // Views object - dynamically populated
-  const views = {};
-  let currentViewKey = null;
-  let nextViewId = 1;
+  const VIEW_KEYS = ['view1', 'view2'];
+  let currentViewKey = 'view1';
 
-  /**
-   * Create a new empty view with the given name
-   * @param {string} name - Display name for the view
-   * @returns {string} - The key of the created view
-   */
-  function createView(name) {
-    const key = 'view_' + nextViewId;
-    nextViewId++;
-    
+  const views = {};
+  VIEW_KEYS.forEach(key => {
     views[key] = {
-      key: key,
-      name: name || 'Untitled View',
+      key,
       areas: [],
       nextAreaId: 1,
       customRoads: [],
       nextRoadId: 1,
     };
-    
-    return key;
-  }
-
-  /**
-   * Delete a view by key
-   * @param {string} key - The view key to delete
-   * @returns {boolean} - Whether deletion was successful
-   */
-  function deleteView(key) {
-    const viewKeys = Object.keys(views);
-    
-    // Don't allow deleting if it's the last view
-    if (viewKeys.length <= 1) {
-      alert('Cannot delete the last view. You must have at least one view.');
-      return false;
-    }
-    
-    if (!views[key]) {
-      return false;
-    }
-    
-    // If deleting current view, switch to another first
-    if (currentViewKey === key) {
-      const otherKey = viewKeys.find(k => k !== key);
-      switchView(otherKey);
-    }
-    
-    delete views[key];
-    rebuildViewSelector();
-    saveAllViewsToServer();
-    return true;
-  }
-
-  /**
-   * Rename a view
-   * @param {string} key - The view key to rename
-   * @param {string} newName - The new display name
-   */
-  function renameView(key, newName) {
-    if (!views[key]) return;
-    views[key].name = newName || 'Untitled View';
-    rebuildViewSelector();
-    saveAllViewsToServer();
-  }
-
-  /**
-   * Get the display name for a view
-   */
-  function getViewName(key) {
-    if (!views[key]) return key;
-    return views[key].name || key;
-  }
+  });
 
   function getCurrentView() {
     return views[currentViewKey];
   }
 
   function getAreas() {
-    const v = getCurrentView();
-    return v ? v.areas : [];
+    return getCurrentView().areas;
   }
 
   function getCustomRoads() {
     const v = getCurrentView();
-    if (!v) return [];
     if (!v.customRoads) v.customRoads = [];
     return v.customRoads;
   }
 
   function nextAreaId() {
     const v = getCurrentView();
-    if (!v) return 1;
     const id = v.nextAreaId;
     v.nextAreaId += 1;
     return id;
@@ -186,7 +120,6 @@
 
   function nextRoadId() {
     const v = getCurrentView();
-    if (!v) return 1;
     if (!v.nextRoadId) v.nextRoadId = 1;
     const id = v.nextRoadId;
     v.nextRoadId += 1;
@@ -194,88 +127,13 @@
   }
 
   // ============================================================
-  // View Selector UI
+  // View Selector
   // ============================================================
   const viewSelect = document.getElementById('viewSelect');
-  const addViewBtn = document.getElementById('addViewBtn');
-  const renameViewBtn = document.getElementById('renameViewBtn');
-  const deleteViewBtn = document.getElementById('deleteViewBtn');
-
-  /**
-   * Rebuild the view selector dropdown from current views
-   */
-  function rebuildViewSelector() {
-    if (!viewSelect) return;
-    
-    viewSelect.innerHTML = '';
-    
-    Object.keys(views).forEach(key => {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = getViewName(key);
-      viewSelect.appendChild(opt);
-    });
-    
-    if (currentViewKey && views[currentViewKey]) {
-      viewSelect.value = currentViewKey;
-    }
-    
-    // Update delete button state
-    if (deleteViewBtn) {
-      deleteViewBtn.disabled = Object.keys(views).length <= 1;
-    }
-  }
-
-  // View selector change handler
   if (viewSelect) {
+    viewSelect.value = currentViewKey;
     viewSelect.addEventListener('change', () => {
       switchView(viewSelect.value);
-    });
-  }
-
-  // Add View button
-  if (addViewBtn) {
-    addViewBtn.addEventListener('click', () => {
-      const name = prompt('Enter a name for the new view:', '');
-      if (name === null) return; // User cancelled
-      
-      const trimmed = name.trim();
-      const viewName = trimmed.length > 0 ? trimmed : 'New View';
-      
-      const newKey = createView(viewName);
-      rebuildViewSelector();
-      switchView(newKey);
-      saveAllViewsToServer();
-    });
-  }
-
-  // Rename View button
-  if (renameViewBtn) {
-    renameViewBtn.addEventListener('click', () => {
-      if (!currentViewKey || !views[currentViewKey]) return;
-      
-      const currentName = getViewName(currentViewKey);
-      const newName = prompt('Enter a new name for this view:', currentName);
-      if (newName === null) return; // User cancelled
-      
-      const trimmed = newName.trim();
-      if (trimmed.length > 0) {
-        renameView(currentViewKey, trimmed);
-      }
-    });
-  }
-
-  // Delete View button
-  if (deleteViewBtn) {
-    deleteViewBtn.addEventListener('click', () => {
-      if (!currentViewKey || !views[currentViewKey]) return;
-      
-      const viewName = getViewName(currentViewKey);
-      if (!confirm(`Are you sure you want to delete "${viewName}"? This cannot be undone.`)) {
-        return;
-      }
-      
-      deleteView(currentViewKey);
     });
   }
 
@@ -365,21 +223,13 @@
   // ============================================================
   async function saveAllViewsToServer() {
     try {
-      // Also save the nextViewId so we don't get key collisions
-      const payload = {
-        data: views,
-        meta: {
-          nextViewId: nextViewId
-        }
-      };
-      
       const res = await fetch(VIEWS_SAVE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ data: views })
       });
 
       if (!res.ok) {
@@ -404,89 +254,30 @@
 
       if (!res.ok) {
         if (res.status === 404) {
-          console.log('No saved view state yet, creating default view');
-          initializeDefaultView();
+          console.log('No saved view state yet');
           return;
         }
         console.error('Load failed', res.status);
         alert('Failed to load saved views (HTTP ' + res.status + ')');
-        initializeDefaultView();
         return;
       }
 
-      const payload = await res.json();
-      
-      // Handle both old format (just views object) and new format (with meta)
-      let loadedViews = payload;
-      let loadedMeta = null;
-      
-      if (payload.data && typeof payload.data === 'object') {
-        // New format with meta
-        loadedViews = payload.data;
-        loadedMeta = payload.meta || {};
-      }
+      const data = await res.json();
 
-      // Clear existing views
-      Object.keys(views).forEach(k => delete views[k]);
-      
-      // Load views from server
-      Object.keys(loadedViews).forEach(key => {
-        const v = loadedViews[key];
-        views[key] = {
-          key: key,
-          name: v.name || key, // Fallback to key if no name
-          areas: v.areas || [],
-          nextAreaId: v.nextAreaId || 1,
-          customRoads: v.customRoads || [],
-          nextRoadId: v.nextRoadId || 1,
-        };
+      Object.keys(data).forEach(key => {
+        if (views[key]) {
+          views[key].areas       = data[key].areas       || [];
+          views[key].nextAreaId  = data[key].nextAreaId  || 1;
+          views[key].customRoads = data[key].customRoads || [];
+          views[key].nextRoadId  = data[key].nextRoadId  || 1;
+        }
       });
 
-      // Restore nextViewId from meta, or calculate from existing keys
-      if (loadedMeta && loadedMeta.nextViewId) {
-        nextViewId = loadedMeta.nextViewId;
-      } else {
-        // Calculate from existing view keys
-        let maxId = 0;
-        Object.keys(views).forEach(key => {
-          const match = key.match(/^view_(\d+)$/);
-          if (match) {
-            maxId = Math.max(maxId, parseInt(match[1], 10));
-          }
-        });
-        nextViewId = maxId + 1;
-      }
-
-      // If no views loaded, create a default one
-      if (Object.keys(views).length === 0) {
-        initializeDefaultView();
-        return;
-      }
-
-      // Set current view to first available
-      currentViewKey = Object.keys(views)[0];
-      
-      rebuildViewSelector();
       rebuildCurrentView();
     } catch (err) {
       console.error(err);
       alert('Error while loading saved views');
-      initializeDefaultView();
     }
-  }
-
-  /**
-   * Initialize with a default view if none exist
-   */
-  function initializeDefaultView() {
-    if (Object.keys(views).length === 0) {
-      const key = createView('Default View');
-      currentViewKey = key;
-    } else {
-      currentViewKey = Object.keys(views)[0];
-    }
-    rebuildViewSelector();
-    rebuildCurrentView();
   }
 
   // Attach to buttons
@@ -922,16 +713,13 @@
   // ============================================================
   document.getElementById('clearAllBtn').addEventListener('click', () => {
     const v = getCurrentView();
-    if (!v) return;
-    
     const areas = v.areas;
-    const viewName = getViewName(currentViewKey);
 
     if (!areas || areas.length === 0) {
       alert('No areas to clear in this view.');
       return;
     }
-    if (!confirm(`Clear all drawn areas, custom roads and highlights for "${viewName}"?`)) {
+    if (!confirm('Clear all drawn areas, custom roads and highlights for ' + currentViewKey + '?')) {
       return;
     }
 
