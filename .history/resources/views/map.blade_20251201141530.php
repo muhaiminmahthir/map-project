@@ -90,6 +90,6 @@
   </script>
 
   <!-- Our Custom JS -->
-  <script src="{{ asset('resources/js/map.js') }}"></script>
+  <script src="{{ asset('js/map.js') }}"></script>
 </body>
 </html>
