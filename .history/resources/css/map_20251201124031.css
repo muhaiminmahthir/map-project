@@ -1,0 +1,76 @@
+  html, body { height:100%; margin:0; }
+  /* Two columns: map grows, sidebar fixed width */
+  .map-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px; /* change 360px to your sidebar width */
+    gap: 0;
+    height: 100vh;           /* full height */
+    overflow: hidden;        /* prevent horizontal scroll */
+  }
+  .area-label {
+  background: rgba(255, 255, 255, 0.85);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #222;
+  border: 1px solid #888;
+  }
+
+  #map { height: 100%; min-width: 0; }  /* min-width:0 is key to prevent overflow */
+  #sidebar { overflow: auto; padding: 12px; background:#fff; }
+  /* If you have a top navbar, subtract its height (e.g., 56px) */
+  .has-navbar .map-page { height: calc(100vh - 56px); }
+  /* Optional: stack on small screens */
+  @media (max-width: 900px) {
+    .map-page { grid-template-columns: 1fr; }
+    #sidebar { height: 40vh; border-top: 1px solid #ddd; }
+    .area-header {
+    font-weight: 600;
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+    }
+    #clearAllBtn {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    border: none;
+    background: #e74c3c;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    }
+    #clearAllBtn:hover {
+      background: #c0392b;
+    }
+  }
+  .pill {
+  display: inline-block;
+  padding: 4px 8px;
+  margin: 2px 4px 2px 0;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 1px solid #ccc;
+  background: #f4f4f4;
+  cursor: pointer;
+  }
+  .pill-active {
+    background: #ffebc2;
+    border-color: #e67e22;
+  }
+  .building-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 2px 0 6px;
+  }
+
+  .building-item {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+  }
