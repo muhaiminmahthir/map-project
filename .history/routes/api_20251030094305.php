@@ -1,4 +1,0 @@
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\OverpassController;
-
-Route::middleware('throttle:30,1')->post('/roads', [OverpassController::class, 'roads']); // 30 requests/min per IP to be polite to Overpass

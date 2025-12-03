@@ -65,7 +65,7 @@ return [
 
         'mariadb' => [
             'driver' => 'mariadb',
-           'url' => env('DB_URL'),
+            'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -83,13 +83,14 @@ return [
             ]) : [],
         ],
 
-        'postgis' => [
+        'pgsql' => [
             'driver' => 'pgsql',
-            'host' => env('POSTGIS_HOST', '35.198.231.78'),
-            'port' => env('POSTGIS_PORT', '5432'),
-            'database' => env('POSTGIS_DATABASE', 'geodb'),
-            'username' => env('POSTGIS_USERNAME', 'geouser'),
-            'password' => env('POSTGIS_PASSWORD', ''),
+            'url' => env('DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
@@ -180,4 +181,3 @@ return [
     ],
 
 ];
-
