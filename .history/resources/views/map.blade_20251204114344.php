@@ -13,6 +13,72 @@
   <!-- Our Custom CSS -->
   <link rel="stylesheet" href="{{ asset('css/map.css') }}">
   
+  <!-- Basemap Switcher Styles -->
+  <style>
+    /* Base Map Selector */
+    .basemap-section {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .basemap-section h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .basemap-selector {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    
+    .basemap-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 8px 4px;
+      border: 2px solid #e9ecef;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    
+    .basemap-btn:hover {
+      border-color: #2196f3;
+    }
+    
+    .basemap-btn.active {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    
+    .basemap-btn .basemap-icon {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 4px;
+      border-radius: 4px;
+    }
+    
+    .basemap-btn span {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    /* Icon colors for each basemap */
+    .basemap-icon.osm { background: #c8e6c9; }
+    .basemap-icon.satellite { background: #1a237e; }
+    .basemap-icon.hybrid { background: #33691e; }
+    .basemap-icon.carto { background: #f5f5f5; border: 1px solid #ddd; }
+    .basemap-icon.esri { background: #0d47a1; }
+  </style>
 </head>
 <body>
   <div class="map-page">
