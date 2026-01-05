@@ -3,6 +3,7 @@
  * Location: public/js/map.js
  * 
  * This version saves spatial data to PostGIS via the SpatialController.
+ * Updated: Added basemap switcher like VM4
  */
 
 (function() {
@@ -22,17 +23,50 @@
   const SPATIAL_ROADS_URL = CONFIG.SPATIAL_ROADS_URL;   // Base for /views/{key}/roads
 
   // ============================================================
-  // Base Map Layers
+  // Base Map Layers (Updated with more options like VM4)
   // ============================================================
+  
+  // OpenStreetMap
   const baseOSM = L.tileLayer(
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }
   );
 
+  // Google Satellite (pure imagery)
+  const googleSat = L.tileLayer(
+    'http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&hl=en',
+    { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: 'Google' }
+  );
+
+  // Google Hybrid (satellite + labels)
+  const googleHybrid = L.tileLayer(
+    'http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}&hl=en',
+    { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: 'Google' }
+  );
+
+  // Carto Light
+  const cartoLight = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    { maxZoom: 20, attribution: '&copy; CARTO' }
+  );
+
+  // Esri Satellite
   const baseEsriSat = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
   );
+
+  // Basemap dictionary (matches data-basemap values in HTML)
+  const basemaps = {
+    'osm': baseOSM,
+    'satellite': googleSat,
+    'hybrid': googleHybrid,
+    'carto': cartoLight,
+    'esri': baseEsriSat
+  };
+
+  // Track current basemap
+  let currentBasemap = 'osm';
 
   // ============================================================
   // Map Initialization
@@ -64,18 +98,211 @@
   const highlightGroup = L.layerGroup().addTo(map);
   const highlightLayers = {};
 
-  // Layer control
+  // Simplified layer control (only for drawn items, not basemaps)
   L.control.layers(
-    {
-      'Standard': baseOSM,
-      'Satellite (Esri)': baseEsriSat
-    },
+    null,  // No basemap options here - we use buttons instead
     {
       'Drawn areas': drawnItems,
       'Highlighted roads': highlightGroup
     },
     { collapsed: false }
   ).addTo(map);
+
+  // ============================================================
+  // Basemap Switcher (NEW - like VM4)
+  // ============================================================
+  function initBasemapSwitcher() {
+    const buttons = document.querySelectorAll('.basemap-btn');
+    
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const basemapKey = btn.dataset.basemap;
+        
+        // Skip if already active
+        if (basemapKey === currentBasemap) return;
+        
+        // Remove current basemap from map
+        if (basemaps[currentBasemap]) {
+          map.removeLayer(basemaps[currentBasemap]);
+        }
+        
+        // Add new basemap and send to back
+        if (basemaps[basemapKey]) {
+          basemaps[basemapKey].addTo(map);
+          basemaps[basemapKey].bringToBack();
+          currentBasemap = basemapKey;
+        }
+        
+        // Update UI - remove active from all, add to clicked
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        console.log('Switched basemap to:', basemapKey);
+      });
+    });
+  }
+
+  // Initialize basemap switcher when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBasemapSwitcher);
+  } else {
+    initBasemapSwitcher();
+  }
+
+  // ============================================================
+  // Building Plan Overlay (WMS from GeoServer)
+  // ============================================================
+  
+  // Available building plan overlays - ADD YOUR TIFF LAYERS HERE
+  // Format: { id: 'layer-name-in-geoserver', name: 'Display Name' }
+  // Note: You'll need a GeoServer with these layers configured
+  const BUILDING_PLAN_OVERLAYS = [
+    { id: 'msb01-geotiff', name: 'MSB01 Building Plan' },
+    { id: 'msb02-geotiff', name: 'MSB02 Building Plan' },
+    { id: 'msb03-geotiff', name: 'MSB03 Building Plan' },
+    // Add more building plans here as needed
+  ];
+
+  // GeoServer configuration for building plans
+  // UPDATE THESE VALUES to match your GeoServer setup
+  const GEOSERVER_URL = 'http://geoserversafe.duckdns.org:65437/geoserver';
+  const GEOSERVER_WORKSPACE = 'gis_project';
+
+  // Current building plan layer state
+  let currentBuildingPlanLayer = null;
+  let buildingPlanVisible = true;
+  let buildingPlanOpacity = 0.6;
+
+  // Function to create a building plan WMS layer
+  function createBuildingPlanLayer(layerId) {
+    const wmsUrl = `${GEOSERVER_URL}/${GEOSERVER_WORKSPACE}/wms`;
+    
+    return L.tileLayer.wms(wmsUrl, {
+      layers: `${GEOSERVER_WORKSPACE}:${layerId}`,
+      format: 'image/png',
+      transparent: true,
+      styles: '',
+      version: '1.1.0',
+      maxZoom: 20,
+      opacity: buildingPlanOpacity
+    });
+  }
+
+  // Function to switch building plan overlay
+  function switchBuildingPlan(layerId) {
+    // Remove current layer if exists
+    if (currentBuildingPlanLayer) {
+      map.removeLayer(currentBuildingPlanLayer);
+      currentBuildingPlanLayer = null;
+    }
+    
+    if (!layerId) return;
+    
+    // Create and add new layer
+    currentBuildingPlanLayer = createBuildingPlanLayer(layerId);
+    
+    if (buildingPlanVisible) {
+      currentBuildingPlanLayer.addTo(map);
+      currentBuildingPlanLayer.bringToBack();
+      
+      // Make sure basemap stays at very back
+      if (basemaps[currentBasemap]) {
+        basemaps[currentBasemap].bringToBack();
+      }
+    }
+  }
+
+  // Initialize building plan controls
+  function initBuildingPlanControls() {
+    const select = document.getElementById('buildingPlanSelect');
+    const toggle = document.getElementById('buildingPlanToggle');
+    const opacitySlider = document.getElementById('buildingPlanOpacity');
+    const opacityValue = document.getElementById('opacityValue');
+    const overlayControl = document.querySelector('.overlay-control');
+    
+    if (!select) {
+      console.warn('Building plan controls not found');
+      return;
+    }
+    
+    // Populate dropdown
+    select.innerHTML = '';
+    
+    if (BUILDING_PLAN_OVERLAYS.length === 0) {
+      select.innerHTML = '<option value="">No building plans available</option>';
+      select.disabled = true;
+      return;
+    }
+    
+    // Add "None" option
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '-- Select a plan --';
+    select.appendChild(noneOpt);
+    
+    BUILDING_PLAN_OVERLAYS.forEach(plan => {
+      const opt = document.createElement('option');
+      opt.value = plan.id;
+      opt.textContent = plan.name;
+      select.appendChild(opt);
+    });
+    
+    // Load first plan by default
+    if (BUILDING_PLAN_OVERLAYS.length > 0) {
+      select.value = BUILDING_PLAN_OVERLAYS[0].id;
+      switchBuildingPlan(BUILDING_PLAN_OVERLAYS[0].id);
+    }
+    
+    // Handle dropdown change
+    select.addEventListener('change', (e) => {
+      switchBuildingPlan(e.target.value);
+    });
+    
+    // Handle toggle on/off
+    if (toggle) {
+      toggle.addEventListener('change', (e) => {
+        buildingPlanVisible = e.target.checked;
+        
+        if (buildingPlanVisible && currentBuildingPlanLayer) {
+          currentBuildingPlanLayer.addTo(map);
+          currentBuildingPlanLayer.bringToBack();
+          if (basemaps[currentBasemap]) {
+            basemaps[currentBasemap].bringToBack();
+          }
+        } else if (currentBuildingPlanLayer) {
+          map.removeLayer(currentBuildingPlanLayer);
+        }
+        
+        // Visual feedback - dim controls when disabled
+        if (overlayControl) {
+          overlayControl.classList.toggle('disabled', !buildingPlanVisible);
+        }
+      });
+    }
+    
+    // Handle opacity slider
+    if (opacitySlider && opacityValue) {
+      opacitySlider.addEventListener('input', (e) => {
+        const value = e.target.value;
+        buildingPlanOpacity = value / 100;
+        
+        if (currentBuildingPlanLayer) {
+          currentBuildingPlanLayer.setOpacity(buildingPlanOpacity);
+        }
+        
+        opacityValue.textContent = `${value}%`;
+      });
+    }
+    
+    console.log('Building plan controls initialized');
+  }
+
+  // Initialize building plan controls when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBuildingPlanControls);
+  } else {
+    initBuildingPlanControls();
+  }
 
   // ============================================================
   // Multi-View State Management
@@ -542,6 +769,42 @@
   }
 
   // ============================================================
+  // Update Area Name in PostGIS
+  // ============================================================
+  async function updateAreaNameInPostGIS(areaId, newName) {
+    if (!currentViewKey) {
+      console.error('No view selected');
+      return false;
+    }
+
+    try {
+      const res = await fetch(`${SPATIAL_AREAS_URL}/${currentViewKey}/areas/${areaId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          area_name: newName
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('Update area name failed:', err);
+        return false;
+      }
+
+      console.log('Area name updated in PostGIS:', areaId, newName);
+      return true;
+
+    } catch (err) {
+      console.error('Error updating area name:', err);
+      return false;
+    }
+  }
+
+  // ============================================================
   // Manual Save/Load Buttons
   // ============================================================
   const saveViewsBtn = document.getElementById('saveViewsBtn');
@@ -684,13 +947,39 @@
       header.title = 'Double-click to rename this area';
       list.appendChild(header);
 
-      // Rename area (local only for now)
-      header.ondblclick = () => {
+      // Rename area and persist to PostGIS
+      header.ondblclick = async () => {
         const current = area.area_name || '';
         const renamed = prompt('New name for this area:', current);
         if (renamed === null) return;
-        area.area_name = renamed.trim() || null;
-        renderAllAreas();
+        
+        const newName = renamed.trim() || null;
+        
+        // Update in PostGIS
+        const success = await updateAreaNameInPostGIS(area.id, newName);
+        if (success) {
+          area.area_name = newName;
+          
+          // Also update the tooltip on the map layer
+          drawnItems.eachLayer(layer => {
+            if (layer._areaId === area.id) {
+              if (layer.getTooltip()) {
+                layer.unbindTooltip();
+              }
+              if (newName) {
+                layer.bindTooltip(newName, {
+                  permanent: true,
+                  direction: 'center',
+                  className: 'area-label'
+                });
+              }
+            }
+          });
+          
+          renderAllAreas();
+        } else {
+          alert('Failed to save area name to database');
+        }
       };
 
       // Road pills
@@ -996,5 +1285,169 @@
   // Initial Load
   // ============================================================
   loadViewsFromServer();
+
+  // ============================================================
+  // Address Search (using Nominatim / OpenStreetMap)
+  // ============================================================
+  (function initAddressSearch() {
+    const searchInput = document.getElementById('addressSearch');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+
+    if (!searchInput || !searchBtn || !searchResults) {
+      console.warn('Search elements not found');
+      return;
+    }
+
+    let searchMarker = null;
+    let searchTimeout = null;
+
+    // Search function using Nominatim API
+    async function searchAddress(query) {
+      if (!query || query.trim().length < 3) {
+        searchResults.innerHTML = '<div class="search-no-results">Type at least 3 characters</div>';
+        return;
+      }
+
+      searchResults.innerHTML = '<div class="search-loading">Searching...</div>';
+
+      try {
+        // Use Nominatim with preference for Malaysia results
+        const url = `https://nominatim.openstreetmap.org/search?` + new URLSearchParams({
+          q: query,
+          format: 'json',
+          addressdetails: 1,
+          limit: 5,
+          countrycodes: 'my',
+          'accept-language': 'en'
+        });
+
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'MapDashboard/1.0' }
+        });
+
+        if (!response.ok) throw new Error('Search failed');
+
+        let data = await response.json();
+
+        // If no results in Malaysia, try worldwide search
+        if (data.length === 0) {
+          const worldUrl = `https://nominatim.openstreetmap.org/search?` + new URLSearchParams({
+            q: query,
+            format: 'json',
+            addressdetails: 1,
+            limit: 5,
+            'accept-language': 'en'
+          });
+
+          const worldResponse = await fetch(worldUrl, {
+            headers: { 'User-Agent': 'MapDashboard/1.0' }
+          });
+
+          data = await worldResponse.json();
+
+          if (data.length === 0) {
+            searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+            return;
+          }
+        }
+
+        displaySearchResults(data);
+
+      } catch (err) {
+        console.error('Search error:', err);
+        searchResults.innerHTML = '<div class="search-no-results">Search failed. Try again.</div>';
+      }
+    }
+
+    // Display search results
+    function displaySearchResults(results) {
+      searchResults.innerHTML = '';
+
+      results.forEach(result => {
+        const item = document.createElement('div');
+        item.className = 'search-result-item';
+
+        const name = result.name || result.display_name.split(',')[0];
+        const address = result.display_name;
+
+        item.innerHTML = `
+          <div class="search-result-name">${name}</div>
+          <div class="search-result-address">${address}</div>
+        `;
+
+        item.addEventListener('click', () => {
+          goToLocation(parseFloat(result.lat), parseFloat(result.lon), name);
+          searchResults.innerHTML = '';
+          searchInput.value = name;
+        });
+
+        searchResults.appendChild(item);
+      });
+    }
+
+    // Go to location and add marker
+    function goToLocation(lat, lon, name) {
+      // Remove previous search marker
+      if (searchMarker) {
+        map.removeLayer(searchMarker);
+      }
+
+      // Fly to location
+      map.flyTo([lat, lon], 16, { duration: 1.5 });
+
+      // Add marker
+      searchMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: 'search-marker',
+          html: `<div style="
+            background: #f44336;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          "></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        })
+      }).addTo(map);
+
+      // Add popup with name
+      searchMarker.bindPopup(`<strong>${name}</strong>`).openPopup();
+    }
+
+    // Event listeners
+    searchBtn.addEventListener('click', () => {
+      searchAddress(searchInput.value);
+    });
+
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchAddress(searchInput.value);
+      }
+    });
+
+    // Auto-search as user types (with debounce)
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        if (searchInput.value.length >= 3) {
+          searchAddress(searchInput.value);
+        } else {
+          searchResults.innerHTML = '';
+        }
+      }, 500);
+    });
+
+    // Clear results when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-container') && !e.target.closest('.search-results')) {
+        searchResults.innerHTML = '';
+      }
+    });
+
+    console.log('Address search initialized');
+  })();
 
 })();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>Map Dashboard</title>
+  <title>Nak Ejas Map</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -47,6 +47,47 @@
             <div class="basemap-icon esri"></div>
             <span>Esri</span>
           </button>
+        </div>
+      </div>
+
+      <!-- Location Search -->
+      <div class="search-section">
+        <h4>Search Location</h4>
+        <div class="search-container">
+          <input type="text" id="addressSearch" class="search-input" placeholder="Search address or place...">
+          <button id="searchBtn" class="search-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+        </div>
+        <div id="searchResults" class="search-results"></div>
+      </div>
+
+      <!-- Building Plan Overlay -->
+      <div class="overlay-section">
+        <h4>Building Plan Overlay</h4>
+        <div class="overlay-control">
+          <div class="overlay-toggle">
+            <input type="checkbox" id="buildingPlanToggle" checked>
+            <label for="buildingPlanToggle">Show Building Plan</label>
+          </div>
+          
+          <div class="overlay-select">
+            <label for="buildingPlanSelect">Select Plan</label>
+            <select id="buildingPlanSelect">
+              <option value="">Loading plans...</option>
+            </select>
+          </div>
+          
+          <div class="opacity-control">
+            <label for="buildingPlanOpacity">Opacity</label>
+            <div class="opacity-slider-container">
+              <input type="range" id="buildingPlanOpacity" min="0" max="100" value="60" class="opacity-slider">
+              <span id="opacityValue" class="opacity-value">60%</span>
+            </div>
+          </div>
         </div>
       </div>
       

@@ -64,6 +64,32 @@
         </div>
         <div id="searchResults" class="search-results"></div>
       </div>
+
+      <!-- Building Plan Overlay -->
+      <div class="overlay-section">
+        <h4>Building Plan Overlay</h4>
+        <div class="overlay-control">
+          <div class="overlay-toggle">
+            <input type="checkbox" id="buildingPlanToggle" checked>
+            <label for="buildingPlanToggle">Show Building Plan</label>
+          </div>
+          
+          <div class="overlay-select">
+            <label for="buildingPlanSelect">Select Plan</label>
+            <select id="buildingPlanSelect">
+              <option value="">Loading plans...</option>
+            </select>
+          </div>
+          
+          <div class="opacity-control">
+            <label for="buildingPlanOpacity">Opacity</label>
+            <div class="opacity-slider-container">
+              <input type="range" id="buildingPlanOpacity" min="0" max="100" value="60" class="opacity-slider">
+              <span id="opacityValue" class="opacity-value">60%</span>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <!-- View Management Section -->
       <div class="view-management">

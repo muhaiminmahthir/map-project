@@ -150,6 +150,161 @@
   }
 
   // ============================================================
+  // Building Plan Overlay (WMS from GeoServer)
+  // ============================================================
+  
+  // Available building plan overlays - ADD YOUR TIFF LAYERS HERE
+  // Format: { id: 'layer-name-in-geoserver', name: 'Display Name' }
+  // Note: You'll need a GeoServer with these layers configured
+  const BUILDING_PLAN_OVERLAYS = [
+    { id: 'msb01-geotiff', name: 'MSB01 Building Plan' },
+    { id: 'msb02-geotiff', name: 'MSB02 Building Plan' },
+    { id: 'msb03-geotiff', name: 'MSB03 Building Plan' },
+    // Add more building plans here as needed
+  ];
+
+  // GeoServer configuration for building plans
+  // UPDATE THESE VALUES to match your GeoServer setup
+  const GEOSERVER_URL = 'http://geoserversafe.duckdns.org:65437/geoserver';
+  const GEOSERVER_WORKSPACE = 'gis_project';
+
+  // Current building plan layer state
+  let currentBuildingPlanLayer = null;
+  let buildingPlanVisible = true;
+  let buildingPlanOpacity = 0.6;
+
+  // Function to create a building plan WMS layer
+  function createBuildingPlanLayer(layerId) {
+    const wmsUrl = `${GEOSERVER_URL}/${GEOSERVER_WORKSPACE}/wms`;
+    
+    return L.tileLayer.wms(wmsUrl, {
+      layers: `${GEOSERVER_WORKSPACE}:${layerId}`,
+      format: 'image/png',
+      transparent: true,
+      styles: '',
+      version: '1.1.0',
+      maxZoom: 20,
+      opacity: buildingPlanOpacity
+    });
+  }
+
+  // Function to switch building plan overlay
+  function switchBuildingPlan(layerId) {
+    // Remove current layer if exists
+    if (currentBuildingPlanLayer) {
+      map.removeLayer(currentBuildingPlanLayer);
+      currentBuildingPlanLayer = null;
+    }
+    
+    if (!layerId) return;
+    
+    // Create and add new layer
+    currentBuildingPlanLayer = createBuildingPlanLayer(layerId);
+    
+    if (buildingPlanVisible) {
+      currentBuildingPlanLayer.addTo(map);
+      currentBuildingPlanLayer.bringToBack();
+      
+      // Make sure basemap stays at very back
+      if (basemaps[currentBasemap]) {
+        basemaps[currentBasemap].bringToBack();
+      }
+    }
+  }
+
+  // Initialize building plan controls
+  function initBuildingPlanControls() {
+    const select = document.getElementById('buildingPlanSelect');
+    const toggle = document.getElementById('buildingPlanToggle');
+    const opacitySlider = document.getElementById('buildingPlanOpacity');
+    const opacityValue = document.getElementById('opacityValue');
+    const overlayControl = document.querySelector('.overlay-control');
+    
+    if (!select) {
+      console.warn('Building plan controls not found');
+      return;
+    }
+    
+    // Populate dropdown
+    select.innerHTML = '';
+    
+    if (BUILDING_PLAN_OVERLAYS.length === 0) {
+      select.innerHTML = '<option value="">No building plans available</option>';
+      select.disabled = true;
+      return;
+    }
+    
+    // Add "None" option
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '-- Select a plan --';
+    select.appendChild(noneOpt);
+    
+    BUILDING_PLAN_OVERLAYS.forEach(plan => {
+      const opt = document.createElement('option');
+      opt.value = plan.id;
+      opt.textContent = plan.name;
+      select.appendChild(opt);
+    });
+    
+    // Load first plan by default
+    if (BUILDING_PLAN_OVERLAYS.length > 0) {
+      select.value = BUILDING_PLAN_OVERLAYS[0].id;
+      switchBuildingPlan(BUILDING_PLAN_OVERLAYS[0].id);
+    }
+    
+    // Handle dropdown change
+    select.addEventListener('change', (e) => {
+      switchBuildingPlan(e.target.value);
+    });
+    
+    // Handle toggle on/off
+    if (toggle) {
+      toggle.addEventListener('change', (e) => {
+        buildingPlanVisible = e.target.checked;
+        
+        if (buildingPlanVisible && currentBuildingPlanLayer) {
+          currentBuildingPlanLayer.addTo(map);
+          currentBuildingPlanLayer.bringToBack();
+          if (basemaps[currentBasemap]) {
+            basemaps[currentBasemap].bringToBack();
+          }
+        } else if (currentBuildingPlanLayer) {
+          map.removeLayer(currentBuildingPlanLayer);
+        }
+        
+        // Visual feedback - dim controls when disabled
+        if (overlayControl) {
+          overlayControl.classList.toggle('disabled', !buildingPlanVisible);
+        }
+      });
+    }
+    
+    // Handle opacity slider
+    if (opacitySlider && opacityValue) {
+      opacitySlider.addEventListener('input', (e) => {
+        const value = e.target.value;
+        buildingPlanOpacity = value / 100;
+        
+        if (currentBuildingPlanLayer) {
+          currentBuildingPlanLayer.setOpacity(buildingPlanOpacity);
+        }
+        
+        opacityValue.textContent = `${value}%`;
+      });
+    }
+    
+    console.log('Building plan controls initialized');
+  }
+
+  // Initialize building plan controls when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBuildingPlanControls);
+  } else {
+    initBuildingPlanControls();
+  }
+
+  // ============================================================
   // Multi-View State Management
   // ============================================================
   

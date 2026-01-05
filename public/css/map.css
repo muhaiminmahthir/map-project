@@ -389,3 +389,148 @@ html, body {
   border: 3px solid white;
   box-shadow: 0 2px 6px rgba(0,0,0,0.35);
 }
+
+/* ========================================
+   Building Plan Overlay Controls
+   ======================================== */
+.overlay-section {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.overlay-section h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.overlay-control {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.overlay-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.overlay-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.overlay-toggle label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+}
+
+.overlay-select {
+  margin-bottom: 10px;
+}
+
+.overlay-select label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.overlay-select select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.overlay-select select:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.overlay-select select:disabled {
+  background: #eee;
+  cursor: not-allowed;
+}
+
+.opacity-control > label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.opacity-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.opacity-slider {
+  flex: 1;
+  height: 5px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #ddd;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #2196f3;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.1s;
+}
+
+.opacity-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.opacity-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #2196f3;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.opacity-value {
+  min-width: 36px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  text-align: right;
+}
+
+.overlay-control.disabled {
+  opacity: 0.5;
+}
+
+.overlay-control.disabled .overlay-select select,
+.overlay-control.disabled .opacity-slider {
+  pointer-events: none;
+}
