@@ -297,16 +297,8 @@
       return;
     }
     
-    // Show loading state
-    select.innerHTML = '<option value="">Loading building plans...</option>';
-    select.disabled = true;
-    
-    // Fetch layers from GeoServer
-    BUILDING_PLAN_OVERLAYS = await fetchBuildingPlanOverlays();
-    
     // Populate dropdown
     select.innerHTML = '';
-    select.disabled = false;
     
     if (BUILDING_PLAN_OVERLAYS.length === 0) {
       select.innerHTML = '<option value="">No building plans available</option>';

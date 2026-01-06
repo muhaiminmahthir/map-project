@@ -156,7 +156,12 @@
   // Available building plan overlays - ADD YOUR TIFF LAYERS HERE
   // Format: { id: 'layer-name-in-geoserver', name: 'Display Name' }
   // Note: need a GeoServer with these layers configured
-  let BUILDING_PLAN_OVERLAYS = [];
+  const BUILDING_PLAN_OVERLAYS = [
+    { id: 'msb01-geotiff', name: 'MSB01 Building Plan' },
+    { id: 'msb02-geotiff', name: 'MSB02 Building Plan' },
+    { id: 'msb03-geotiff', name: 'MSB03 Building Plan' },
+    // Add more building plans here as needed
+  ];
 
   // GeoServer configuration for building plans
   // UPDATE THESE VALUES to match your GeoServer setup
@@ -167,83 +172,6 @@
   let currentBuildingPlanLayer = null;
   let buildingPlanVisible = true;
   let buildingPlanOpacity = 0.6;
-
-  // ============================================================
-  // Fetch available GeoTIFF layers from GeoServer
-  // ============================================================
-  async function fetchBuildingPlanOverlays() {
-    try {
-      const wmsUrl = `${GEOSERVER_URL}/${GEOSERVER_WORKSPACE}/wms`;
-      const capabilitiesUrl = `${wmsUrl}?service=WMS&request=GetCapabilities`;
-      console.log('Fetching capabilities from:', capabilitiesUrl);
-      
-      const response = await fetch(capabilitiesUrl);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-      
-      const text = await response.text();
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(text, 'text/xml');
-      
-      // Try multiple selectors (WMS 1.1.0 vs 1.3.0 have different structures)
-      let layers = xml.querySelectorAll('Layer > Name');
-      
-      if (layers.length === 0) {
-        layers = xml.getElementsByTagName('Name');
-      }
-      
-      console.log('All layer names found:', Array.from(layers).map(l => l.textContent));
-      
-      const overlays = [];
-      
-      layers.forEach(layer => {
-        const fullLayerName = layer.textContent;
-        
-        // Extract just the layer name (remove workspace prefix if present)
-        const layerName = fullLayerName.includes(':') 
-          ? fullLayerName.split(':')[1] 
-          : fullLayerName;
-        
-        // Filter for GeoTIFF layers - ADJUST THIS PATTERN IF NEEDED
-        if (layerName.toLowerCase().includes('geotiff') || 
-            layerName.toLowerCase().includes('tiff') ||
-            layerName.toLowerCase().startsWith('msb')) {
-          overlays.push({
-            id: layerName,
-            name: formatLayerDisplayName(layerName)
-          });
-        }
-      });
-      
-      // Sort alphabetically
-      overlays.sort((a, b) => a.name.localeCompare(b.name));
-      
-      console.log(`Found ${overlays.length} building plan overlay(s):`, overlays);
-      return overlays;
-      
-    } catch (error) {
-      console.error('Failed to fetch GeoServer capabilities:', error);
-      return [];
-    }
-  }
-
-  // Format layer ID into display name
-  function formatLayerDisplayName(layerId) {
-    const baseName = layerId.replace(/-geotiff$/i, '');
-    
-    const msbMatch = baseName.match(/^(msb)(\d+)$/i);
-    if (msbMatch) {
-      return `${msbMatch[1].toUpperCase()}${msbMatch[2].padStart(2, '0')} Building Plan`;
-    }
-    
-    const formatted = baseName
-      .replace(/[-_]/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-    
-    return `${formatted} Building Plan`;
-  }
 
   // Function to create a building plan WMS layer
   function createBuildingPlanLayer(layerId) {
@@ -285,7 +213,7 @@
   }
 
   // Initialize building plan controls
-  async function initBuildingPlanControls() {
+  function initBuildingPlanControls() {
     const select = document.getElementById('buildingPlanSelect');
     const toggle = document.getElementById('buildingPlanToggle');
     const opacitySlider = document.getElementById('buildingPlanOpacity');
@@ -297,16 +225,8 @@
       return;
     }
     
-    // Show loading state
-    select.innerHTML = '<option value="">Loading building plans...</option>';
-    select.disabled = true;
-    
-    // Fetch layers from GeoServer
-    BUILDING_PLAN_OVERLAYS = await fetchBuildingPlanOverlays();
-    
     // Populate dropdown
     select.innerHTML = '';
-    select.disabled = false;
     
     if (BUILDING_PLAN_OVERLAYS.length === 0) {
       select.innerHTML = '<option value="">No building plans available</option>';
