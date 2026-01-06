@@ -6,6 +6,7 @@ use App\Http\Controllers\OverpassController;
 use App\Http\Controllers\GeoController;
 use App\Http\Controllers\MapViewController;
 use App\Http\Controllers\SpatialController;
+use App\Http\Controllers\GeoServerProxyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,5 +24,6 @@ Route::get('/admin-areas', [GeoController::class, 'adminAreas'])->name('api.admi
 Route::get('/admin-geometry/{relId}', [GeoController::class, 'geometry'])->name('api.admin-geometry');
 Route::get('/view-state/{key}', [MapViewController::class, 'show'])->name('api.views.load');
 Route::post('/view-state/{key}', [MapViewController::class, 'store'])->name('api.views.save');
+Route::get('/geoserver-proxy', [GeoServerProxyController::class, 'proxy']);
 // Include spatial routes
 require __DIR__.'/spatial_routes.php';

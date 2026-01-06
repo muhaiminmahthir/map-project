@@ -28,7 +28,7 @@
   function proxyUrl(path) {
       return `/geoserver-proxy?path=${encodeURIComponent(path)}`;
   }
-
+  
   // ============================================================
   // Base Map Layers (Updated with more options like VM4)
   // ============================================================
@@ -180,56 +180,59 @@
   // ============================================================
   async function fetchBuildingPlanOverlays() {
     try {
-        // Use proxy to bypass CORS
-        const wmsPath = `${GEOSERVER_WORKSPACE}/wms`;
-        const capabilitiesUrl = proxyUrl(wmsPath) + '&service=WMS&request=GetCapabilities';
+      const wmsUrl = `${GEOSERVER_URL}/${GEOSERVER_WORKSPACE}/wms`;
+      const capabilitiesUrl = `${wmsUrl}?service=WMS&request=GetCapabilities`;
+      console.log('Fetching capabilities from:', capabilitiesUrl);
+      
+      const response = await fetch(capabilitiesUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      
+      const text = await response.text();
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, 'text/xml');
+      
+      // Try multiple selectors (WMS 1.1.0 vs 1.3.0 have different structures)
+      let layers = xml.querySelectorAll('Layer > Name');
+      
+      if (layers.length === 0) {
+        layers = xml.getElementsByTagName('Name');
+      }
+      
+      console.log('All layer names found:', Array.from(layers).map(l => l.textContent));
+      
+      const overlays = [];
+      
+      layers.forEach(layer => {
+        const fullLayerName = layer.textContent;
         
-        console.log('Fetching capabilities from:', capabilitiesUrl);
+        // Extract just the layer name (remove workspace prefix if present)
+        const layerName = fullLayerName.includes(':') 
+          ? fullLayerName.split(':')[1] 
+          : fullLayerName;
         
-        const response = await fetch(capabilitiesUrl);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error: ${response.status}`);
+        // Filter for GeoTIFF layers - ADJUST THIS PATTERN IF NEEDED
+        if (layerName.toLowerCase().includes('geotiff') || 
+            layerName.toLowerCase().includes('tiff') ||
+            layerName.toLowerCase().startsWith('msb')) {
+          overlays.push({
+            id: layerName,
+            name: formatLayerDisplayName(layerName)
+          });
         }
-        
-        const text = await response.text();
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(text, 'text/xml');
-        
-        let layers = xml.querySelectorAll('Layer > Name');
-        
-        if (layers.length === 0) {
-            layers = xml.getElementsByTagName('Name');
-        }
-        
-        console.log('All layer names found:', Array.from(layers).map(l => l.textContent));
-        
-        const overlays = [];
-        
-        layers.forEach(layer => {
-            const fullLayerName = layer.textContent;
-            const layerName = fullLayerName.includes(':') 
-                ? fullLayerName.split(':')[1] 
-                : fullLayerName;
-            
-            if (layerName.toLowerCase().includes('geotiff') || 
-                layerName.toLowerCase().includes('tiff') ||
-                layerName.toLowerCase().startsWith('msb')) {
-                overlays.push({
-                    id: layerName,
-                    name: formatLayerDisplayName(layerName)
-                });
-            }
-        });
-        
-        overlays.sort((a, b) => a.name.localeCompare(b.name));
-        
-        console.log(`Found ${overlays.length} building plan overlay(s):`, overlays);
-        return overlays;
-        
+      });
+      
+      // Sort alphabetically
+      overlays.sort((a, b) => a.name.localeCompare(b.name));
+      
+      console.log(`Found ${overlays.length} building plan overlay(s):`, overlays);
+      return overlays;
+      
     } catch (error) {
-        console.error('Failed to fetch GeoServer capabilities:', error);
-        return [];
+      console.error('Failed to fetch GeoServer capabilities:', error);
+      return [];
     }
   }
 
