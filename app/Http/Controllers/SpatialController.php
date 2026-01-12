@@ -10,22 +10,7 @@ use Illuminate\Support\Facades\Log;
  * SpatialController
  * 
  * Handles saving and retrieving spatial data from PostGIS.
- * This works alongside your existing MapViewController.
- * 
- * Routes to add in routes/api.php:
- * 
- * Route::prefix('spatial')->group(function () {
- *     Route::get('/views', [SpatialController::class, 'listViews']);
- *     Route::get('/views/{key}', [SpatialController::class, 'getView']);
- *     Route::post('/views', [SpatialController::class, 'createView']);
- *     Route::put('/views/{key}', [SpatialController::class, 'updateView']);
- *     Route::delete('/views/{key}', [SpatialController::class, 'deleteView']);
- *     
- *     Route::post('/views/{viewKey}/areas', [SpatialController::class, 'saveArea']);
- *     Route::post('/views/{viewKey}/roads', [SpatialController::class, 'saveRoad']);
- *     
- *     Route::get('/export/{viewKey}', [SpatialController::class, 'exportGeoJSON']);
- * });
+ * Supports: Views, Areas (polygons), Roads (polylines), Markers (points)
  */
 class SpatialController extends Controller
 {
@@ -33,7 +18,7 @@ class SpatialController extends Controller
      * Get PostGIS database connection
      */
     private function postgis()
- {
+    {
         return DB::connection('postgis');
     }
 
@@ -61,12 +46,12 @@ class SpatialController extends Controller
     }
 
     /**
-     * Get a single view with all its areas and roads
+     * Get a single view with all its areas, roads, and markers
      */
     public function getView(string $key)
     {
         $view = $this->postgis()
-       ->table('map_views')
+            ->table('map_views')
             ->where('view_key', $key)
             ->first();
 
@@ -86,72 +71,54 @@ class SpatialController extends Controller
             ->where('view_id', $view->id)
             ->get();
 
-            foreach ($areas as $area) {
-                if (is_string($area->geometry)) {
-                    $area->geometry = json_decode($area->geometry, true);
-                }
-
-                $area->roads = $this->postgis()
-                    ->table('roads')
-                    ->select([
-                        'id',
-                        'road_name',
-                        'road_type',
-                        'osm_id',
-                        'is_highlighted',
-                        DB::raw("ST_AsGeoJSON(geom) as geometry")
-                    ])
-                    ->where('area_id', $area->id)
-                    ->get();
-
-                foreach ($area->roads as $road) {
-                    if (is_string($road->geometry)) {
-                        $road->geometry = json_decode($road->geometry, true);
-                    }
-                }
-
-                $area->buildings = $this->postgis()
-                    ->table('buildings')
-                    ->select([
-                        'id',
-                        'building_name',
-                        'lot_no',
-                        DB::raw("ST_AsGeoJSON(geom) as geometry")
-                    ])
-                    ->where('area_id', $area->id)
-                    ->get();
-
-                foreach ($area->buildings as $bld) {
-                    if (is_string($bld->geometry)) {
-                        $bld->geometry = json_decode($bld->geometry, true);
-                    }
-                }
+        foreach ($areas as $area) {
+            if (is_string($area->geometry)) {
+                $area->geometry = json_decode($area->geometry, true);
             }
-            
-            $customRoads = $this->postgis()
-                ->table('roads')
-                ->select([
-                    'id',
-                    'road_name',
-                    'road_type',
-                    'osm_id',
-                    'is_highlighted',
-                    DB::raw("ST_AsGeoJSON(geom) as geometry")
-                ])
-                ->where('view_id', $view->id)
-                ->whereNull('area_id')
-                ->get();
+        }
 
-            foreach ($customRoads as $road) {
-                if (is_string($road->geometry)) {
-                    $road->geometry = json_decode($road->geometry, true);
-                }
+        // Get roads (custom drawn roads, not linked to areas)
+        $roads = $this->postgis()
+            ->table('roads')
+            ->select([
+                'id',
+                'road_name',
+                'road_type',
+                DB::raw("ST_AsGeoJSON(geom) as geometry")
+            ])
+            ->where('view_id', $view->id)
+            ->get();
+
+        foreach ($roads as $road) {
+            if (is_string($road->geometry)) {
+                $road->geometry = json_decode($road->geometry, true);
             }
+        }
+
+        // Get markers
+        $markers = $this->postgis()
+            ->table('markers')
+            ->select([
+                'id',
+                'marker_name',
+                'marker_type',
+                'description',
+                DB::raw("ST_AsGeoJSON(geom) as geometry")
+            ])
+            ->where('view_id', $view->id)
+            ->get();
+
+        foreach ($markers as $marker) {
+            if (is_string($marker->geometry)) {
+                $marker->geometry = json_decode($marker->geometry, true);
+            }
+        }
 
         return response()->json([
             'view' => $view,
             'areas' => $areas,
-            'custom_roads' => $customRoads
+            'roads' => $roads,
+            'markers' => $markers
         ]);
     }
 
@@ -167,8 +134,7 @@ class SpatialController extends Controller
 
         $key = $validated['key'] ?? 'view_' . time() . '_' . rand(1000, 9999);
 
-        // Check if key already exists
-    $exists = $this->postgis()
+        $exists = $this->postgis()
             ->table('map_views')
             ->where('view_key', $key)
             ->exists();
@@ -199,7 +165,7 @@ class SpatialController extends Controller
     public function updateView(Request $request, string $key)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255' 
+            'name' => 'required|string|max:255'
         ]);
 
         $updated = $this->postgis()
@@ -231,10 +197,10 @@ class SpatialController extends Controller
             return response()->json(['error' => 'View not found'], 404);
         }
 
-        // Cascade delete will handle areas, roads, buildings
+        // Cascade delete will handle areas, roads, markers
         $this->postgis()
             ->table('map_views')
-          ->where('id', $view->id)
+            ->where('id', $view->id)
             ->delete();
 
         return response()->json(['status' => 'deleted']);
@@ -249,9 +215,7 @@ class SpatialController extends Controller
             'name' => 'nullable|string|max:255',
             'geometry' => 'required|array',
             'geometry.type' => 'required|string|in:Polygon',
-            'geometry.coordinates' => 'required|array',
-            'roads' => 'sometimes|array',
-            'buildings' => 'sometimes|array'
+            'geometry.coordinates' => 'required|array'
         ]);
 
         $view = $this->postgis()
@@ -265,9 +229,8 @@ class SpatialController extends Controller
 
         $geomSQL = $this->geomFromGeoJSON($validated['geometry']);
 
-        // Insert area
         $areaId = $this->postgis()
-         ->table('areas')
+            ->table('areas')
             ->insertGetId([
                 'view_id' => $view->id,
                 'area_name' => $validated['name'] ?? null,
@@ -275,48 +238,6 @@ class SpatialController extends Controller
                 'created_at' => now(),
                 'updated_at' => now()
             ]);
-
-        // Insert roads if provided
-        if (!empty($validated['roads'])) {
-            foreach ($validated['roads'] as $road) {
-                if (!empty($road['geometry'])) {
-                    $roadGeomSQL = $this->geomFromGeoJSON($road['geometry']);
-                    
-                    $this->postgis()
-                        ->table('roads')
-                        ->insert([
-                            'area_id' => $areaId,
-                            'view_id' => $view->id,
-                            'road_name' => $road['name'] ?? $road['label'] ?? null,
-                            'road_type' => $road['type'] ?? 'osm',
-                            'osm_id' => $road['osm_id'] ?? null,
-                            'geom' => DB::raw($roadGeomSQL),
-                            'is_highlighted' => $road['is_highlighted'] ?? false,
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ]);
-                }
-            }
-        }
-
-        // Insert buildings if provided
-        if (!empty($validated['buildings'])) {
-      foreach ($validated['buildings'] as $building) {
-                if (!empty($building['geometry'])) {
-                    $buildingGeomSQL = $this->geomFromGeoJSON($building['geometry']);
-                    
-                    $this->postgis()
-                        ->table('buildings')
-                        ->insert([
-                            'area_id' => $areaId,
-                            'building_name' => $building['name'] ?? null,
-                            'lot_no' => $building['lot_no'] ?? null,
-                            'geom' => DB::raw($buildingGeomSQL),
-                            'created_at' => now()
-                        ]);
-                }
-            }
-        }
 
         // Update view timestamp
         $this->postgis()
@@ -339,7 +260,6 @@ class SpatialController extends Controller
             'area_name' => 'nullable|string|max:255'
         ]);
 
-        // Verify the view exists
         $view = $this->postgis()
             ->table('map_views')
             ->where('view_key', $viewKey)
@@ -349,7 +269,6 @@ class SpatialController extends Controller
             return response()->json(['error' => 'View not found'], 404);
         }
 
-        // Verify the area belongs to this view
         $area = $this->postgis()
             ->table('areas')
             ->where('id', $areaId)
@@ -360,7 +279,6 @@ class SpatialController extends Controller
             return response()->json(['error' => 'Area not found in this view'], 404);
         }
 
-        // Update the area name
         $this->postgis()
             ->table('areas')
             ->where('id', $areaId)
@@ -369,7 +287,6 @@ class SpatialController extends Controller
                 'updated_at' => now()
             ]);
 
-        // Update view timestamp
         $this->postgis()
             ->table('map_views')
             ->where('id', $view->id)
@@ -383,16 +300,15 @@ class SpatialController extends Controller
     }
 
     /**
-     * Save a custom road (not from OSM) - typically drawn by user
+     * Save a road (polyline) to a view
      */
     public function saveRoad(Request $request, string $viewKey)
-{
+    {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'geometry' => 'required|array',
             'geometry.type' => 'required|string|in:LineString',
-            'geometry.coordinates' => 'required|array',
-            'area_id' => 'sometimes|integer'
+            'geometry.coordinates' => 'required|array'
         ]);
 
         $view = $this->postgis()
@@ -409,8 +325,8 @@ class SpatialController extends Controller
         $roadId = $this->postgis()
             ->table('roads')
             ->insertGetId([
-                'area_id' => $validated['area_id'] ?? null,
                 'view_id' => $view->id,
+                'area_id' => null,
                 'road_name' => $validated['name'],
                 'road_type' => 'custom',
                 'geom' => DB::raw($geomSQL),
@@ -418,15 +334,173 @@ class SpatialController extends Controller
                 'updated_at' => now()
             ]);
 
+        $this->postgis()
+            ->table('map_views')
+            ->where('id', $view->id)
+            ->update(['updated_at' => now()]);
+
         return response()->json([
             'status' => 'saved',
-        'road_id' => $roadId
+            'road_id' => $roadId
         ], 201);
     }
 
     /**
+     * Update a road's name
+     */
+    public function updateRoad(Request $request, string $viewKey, int $roadId)
+    {
+        $validated = $request->validate([
+            'road_name' => 'nullable|string|max:255'
+        ]);
+
+        $view = $this->postgis()
+            ->table('map_views')
+            ->where('view_key', $viewKey)
+            ->first();
+
+        if (!$view) {
+            return response()->json(['error' => 'View not found'], 404);
+        }
+
+        $road = $this->postgis()
+            ->table('roads')
+            ->where('id', $roadId)
+            ->where('view_id', $view->id)
+            ->first();
+
+        if (!$road) {
+            return response()->json(['error' => 'Road not found in this view'], 404);
+        }
+
+        $this->postgis()
+            ->table('roads')
+            ->where('id', $roadId)
+            ->update([
+                'road_name' => $validated['road_name'],
+                'updated_at' => now()
+            ]);
+
+        $this->postgis()
+            ->table('map_views')
+            ->where('id', $view->id)
+            ->update(['updated_at' => now()]);
+
+        return response()->json([
+            'status' => 'updated',
+            'road_id' => $roadId,
+            'road_name' => $validated['road_name']
+        ]);
+    }
+
+    /**
+     * Save a marker (point) to a view
+     */
+    public function saveMarker(Request $request, string $viewKey)
+    {
+        $validated = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'marker_type' => 'required|string|max:50',
+            'description' => 'nullable|string|max:500',
+            'geometry' => 'required|array',
+            'geometry.type' => 'required|string|in:Point',
+            'geometry.coordinates' => 'required|array|size:2'
+        ]);
+
+        $view = $this->postgis()
+            ->table('map_views')
+            ->where('view_key', $viewKey)
+            ->first();
+
+        if (!$view) {
+            return response()->json(['error' => 'View not found'], 404);
+        }
+
+        $geomSQL = $this->geomFromGeoJSON($validated['geometry']);
+
+        $markerId = $this->postgis()
+            ->table('markers')
+            ->insertGetId([
+                'view_id' => $view->id,
+                'marker_name' => $validated['name'] ?? null,
+                'marker_type' => $validated['marker_type'],
+                'description' => $validated['description'] ?? null,
+                'geom' => DB::raw($geomSQL),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+        $this->postgis()
+            ->table('map_views')
+            ->where('id', $view->id)
+            ->update(['updated_at' => now()]);
+
+        return response()->json([
+            'status' => 'saved',
+            'marker_id' => $markerId
+        ], 201);
+    }
+
+    /**
+     * Update a marker's name
+     */
+    public function updateMarker(Request $request, string $viewKey, int $markerId)
+    {
+        $validated = $request->validate([
+            'marker_name' => 'nullable|string|max:255',
+            'marker_type' => 'sometimes|string|max:50',
+            'description' => 'nullable|string|max:500'
+        ]);
+
+        $view = $this->postgis()
+            ->table('map_views')
+            ->where('view_key', $viewKey)
+            ->first();
+
+        if (!$view) {
+            return response()->json(['error' => 'View not found'], 404);
+        }
+
+        $marker = $this->postgis()
+            ->table('markers')
+            ->where('id', $markerId)
+            ->where('view_id', $view->id)
+            ->first();
+
+        if (!$marker) {
+            return response()->json(['error' => 'Marker not found in this view'], 404);
+        }
+
+        $updateData = ['updated_at' => now()];
+        
+        if (array_key_exists('marker_name', $validated)) {
+            $updateData['marker_name'] = $validated['marker_name'];
+        }
+        if (isset($validated['marker_type'])) {
+            $updateData['marker_type'] = $validated['marker_type'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $updateData['description'] = $validated['description'];
+        }
+
+        $this->postgis()
+            ->table('markers')
+            ->where('id', $markerId)
+            ->update($updateData);
+
+        $this->postgis()
+            ->table('map_views')
+            ->where('id', $view->id)
+            ->update(['updated_at' => now()]);
+
+        return response()->json([
+            'status' => 'updated',
+            'marker_id' => $markerId
+        ]);
+    }
+
+    /**
      * Export a view as GeoJSON FeatureCollection
-     * This can be used by external tools or downloaded
      */
     public function exportGeoJSON(string $viewKey)
     {
@@ -453,7 +527,7 @@ class SpatialController extends Controller
             ->get();
 
         foreach ($areas as $area) {
-       $features[] = [
+            $features[] = [
                 'type' => 'Feature',
                 'geometry' => json_decode($area->geometry, true),
                 'properties' => [
@@ -467,15 +541,12 @@ class SpatialController extends Controller
         // Export roads
         $roads = $this->postgis()
             ->table('roads')
-            ->join('areas', 'roads.area_id', '=', 'areas.id')
-            ->where('areas.view_id', $view->id)
+            ->where('view_id', $view->id)
             ->select([
-                'roads.id',
-                'roads.road_name',
-                'roads.road_type',
-                'roads.osm_id',
-                'roads.is_highlighted',
-                DB::raw("ST_AsGeoJSON(roads.geom)::json as geometry")
+                'id',
+                'road_name',
+                'road_type',
+                DB::raw("ST_AsGeoJSON(geom)::json as geometry")
             ])
             ->get();
 
@@ -486,10 +557,35 @@ class SpatialController extends Controller
                 'properties' => [
                     'id' => $road->id,
                     'name' => $road->road_name,
-                'type' => $road->road_type,
-                    'osm_id' => $road->osm_id,
-                    'is_highlighted' => $road->is_highlighted,
+                    'type' => $road->road_type,
                     'feature_type' => 'road'
+                ]
+            ];
+        }
+
+        // Export markers
+        $markers = $this->postgis()
+            ->table('markers')
+            ->where('view_id', $view->id)
+            ->select([
+                'id',
+                'marker_name',
+                'marker_type',
+                'description',
+                DB::raw("ST_AsGeoJSON(geom)::json as geometry")
+            ])
+            ->get();
+
+        foreach ($markers as $marker) {
+            $features[] = [
+                'type' => 'Feature',
+                'geometry' => json_decode($marker->geometry, true),
+                'properties' => [
+                    'id' => $marker->id,
+                    'name' => $marker->marker_name,
+                    'marker_type' => $marker->marker_type,
+                    'description' => $marker->description,
+                    'feature_type' => 'marker'
                 ]
             ];
         }
@@ -505,8 +601,8 @@ class SpatialController extends Controller
     }
 
     /**
-     * Sync current view data from the existing JSON storage to PostGIS
-     * This is a migration helper - call once to move existing data
+     * Sync current view data from existing JSON storage to PostGIS
+     * This is a migration helper
      */
     public function syncFromJSON(Request $request)
     {
@@ -517,9 +613,8 @@ class SpatialController extends Controller
         $imported = 0;
 
         foreach ($validated['views'] as $key => $viewData) {
-            // Create or update view
-            $viewId = $this->postgis()
-           ->table('map_views')
+            $this->postgis()
+                ->table('map_views')
                 ->updateOrInsert(
                     ['view_key' => $key],
                     [
@@ -539,40 +634,59 @@ class SpatialController extends Controller
                     if (!empty($areaData['geometry'])) {
                         $geomSQL = $this->geomFromGeoJSON($areaData['geometry']);
 
-                        $areaId = $this->postgis()
+                        $this->postgis()
                             ->table('areas')
-                            ->insertGetId([
+                            ->insert([
                                 'view_id' => $view->id,
-                                'area_name' => $areaData['customName'] ?? null,
+                                'area_name' => $areaData['area_name'] ?? $areaData['customName'] ?? null,
                                 'geom' => DB::raw($geomSQL),
                                 'created_at' => now(),
                                 'updated_at' => now()
                             ]);
-
-                        // Note: Roads from JSON don't have geometry
-                        // They need to be fetched from Overpass again
-                        // or we store just the metadata
-
 
                         $imported++;
                     }
                 }
             }
 
-            // Import custom roads
-            if (!empty($viewData['customRoads'])) {
-                foreach ($viewData['customRoads'] as $roadData) {
+            // Import roads
+            if (!empty($viewData['roads']) || !empty($viewData['customRoads'])) {
+                $roads = $viewData['roads'] ?? $viewData['customRoads'] ?? [];
+                foreach ($roads as $roadData) {
                     if (!empty($roadData['geometry'])) {
                         $geomSQL = $this->geomFromGeoJSON($roadData['geometry']);
 
                         $this->postgis()
                             ->table('roads')
                             ->insert([
-                                'area_id' => null, // Custom roads may not belong to an area
-                                'road_name' => $roadData['name'] ?? 'Unnamed',
+                                'view_id' => $view->id,
+                                'area_id' => null,
+                                'road_name' => $roadData['road_name'] ?? $roadData['name'] ?? 'Unnamed',
                                 'road_type' => 'custom',
                                 'geom' => DB::raw($geomSQL),
-                                'is_highlighted' => $roadData['isHighlighted'] ?? false,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ]);
+
+                        $imported++;
+                    }
+                }
+            }
+
+            // Import markers
+            if (!empty($viewData['markers'])) {
+                foreach ($viewData['markers'] as $markerData) {
+                    if (!empty($markerData['geometry'])) {
+                        $geomSQL = $this->geomFromGeoJSON($markerData['geometry']);
+
+                        $this->postgis()
+                            ->table('markers')
+                            ->insert([
+                                'view_id' => $view->id,
+                                'marker_name' => $markerData['marker_name'] ?? $markerData['name'] ?? null,
+                                'marker_type' => $markerData['marker_type'] ?? 'generic',
+                                'description' => $markerData['description'] ?? null,
+                                'geom' => DB::raw($geomSQL),
                                 'created_at' => now(),
                                 'updated_at' => now()
                             ]);
