@@ -85,11 +85,11 @@ return [
 
         'postgis' => [
             'driver' => 'pgsql',
-            'host' => env('POSTGIS_HOST', '35.198.231.78'),
+            'host' => env('POSTGIS_HOST', '10.164.14.202'),
             'port' => env('POSTGIS_PORT', '5432'),
             'database' => env('POSTGIS_DATABASE', 'geodb'),
             'username' => env('POSTGIS_USERNAME', 'geouser'),
-            'password' => env('POSTGIS_PASSWORD', ''),
+            'password' => env('POSTGIS_PASSWORD', 'password'),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,

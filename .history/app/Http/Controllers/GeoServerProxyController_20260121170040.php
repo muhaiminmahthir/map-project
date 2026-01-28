@@ -10,7 +10,7 @@ class GeoServerProxyController extends Controller
     /**
      * GeoServer base URL - CHANGE IF NEEDED
      */
-    private $geoserverBase = 'http://10.164.14.203:8080/geoserver';
+    private $geoserverBase = 'http://geoserversafe.duckdns.org:65437/geoserver';
 
     /**
      * Proxy requests to GeoServer to bypass CORS
